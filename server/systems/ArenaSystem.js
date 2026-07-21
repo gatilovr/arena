@@ -6,16 +6,17 @@ import { ARENA } from '../../shared/constants.js';
 // ============================================================================
 
 const ARENA_CONFIG = {
-  // Solo player regen: 2-5 HP/sec when alone
-  SOLO_REGEN_MIN: 2,
-  SOLO_REGEN_MAX: 5,
-  SOLO_REGEN_INTERVAL: 1, // apply regen every N seconds
+  // Solo player regen: 1-3 HP/sec when alone
+  SOLO_REGEN_MIN: 1,
+  SOLO_REGEN_MAX: 3,
+  SOLO_REGEN_INTERVAL: 1,
 
   // Random buff spawns
-  BUFF_SPAWN_INTERVAL: 20, // seconds between random buff spawns
-  BUFF_SPAWN_RADIUS: 35,   // max distance from center to spawn
+  BUFF_SPAWN_INTERVAL: 20,
+  BUFF_SPAWN_MIN_DIST: 5,
+  BUFF_SPAWN_MAX_DIST: 30,
 
-  // Buff pool for arena spawns (subset of BUFFS)
+  // Buff pool
   BUFF_POOL: ['power', 'haste', 'barrier', 'fury', 'luck', 'magnet'],
 };
 
@@ -71,11 +72,23 @@ export class ArenaSystem {
     const pool = ARENA_CONFIG.BUFF_POOL;
     const type = pool[Math.floor(Math.random() * pool.length)];
 
-    // Random position within arena bounds
-    const angle = Math.random() * Math.PI * 2;
-    const dist = Math.random() * ARENA_CONFIG.BUFF_SPAWN_RADIUS;
-    const x = Math.cos(angle) * dist;
-    const z = Math.sin(angle) * dist;
+    // Spawn between center and nearest player
+    const players = this.room.playersArr().filter(p => p.alive);
+    let targetX = 0, targetZ = 0;
+    if (players.length > 0) {
+      // Pick random alive player as target
+      const p = players[Math.floor(Math.random() * players.length)];
+      targetX = p.x;
+      targetZ = p.z;
+    }
+
+    // Random point along line from center to player
+    const t = ARENA_CONFIG.BUFF_SPAWN_MIN_DIST +
+      Math.random() * (ARENA_CONFIG.BUFF_SPAWN_MAX_DIST - ARENA_CONFIG.BUFF_SPAWN_MIN_DIST);
+    const playerDist = Math.hypot(targetX, targetZ) || 1;
+    const ratio = Math.min(t / playerDist, 1); // clamp to player distance
+    const x = targetX * ratio + (Math.random() - 0.5) * 4; // small offset
+    const z = targetZ * ratio + (Math.random() - 0.5) * 4;
 
     // Clamp to arena bounds
     const clampedX = Math.max(-ARENA.LIMIT, Math.min(ARENA.LIMIT, x));
@@ -89,7 +102,7 @@ export class ArenaSystem {
     if (buffDef) {
       this.room.sendEvent({
         type: 'ann',
-        text: `✨ ${buffDef.icon} ${buffDef.name} появился на арене!`,
+        text: `${buffDef.icon} ${buffDef.name} появился на арене!`,
         color: buffDef.color,
       });
     }

@@ -850,6 +850,7 @@ export class Enemy {
     this.rebraddCf1Cd -= dt;
     this.rebraddBsCd -= dt;
     this.rebraddMcCd -= dt;
+    this.bossStateT -= dt;
 
     // Bone Storm active
     if (this.bossState === 'boneStorm') {

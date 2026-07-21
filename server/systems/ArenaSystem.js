@@ -6,9 +6,9 @@ import { ARENA } from '../../shared/constants.js';
 // ============================================================================
 
 const ARENA_CONFIG = {
-  // Solo player regen: 1-3 HP/sec when alone
+  // Solo player regen: 1-1.5 HP/sec when alone
   SOLO_REGEN_MIN: 1,
-  SOLO_REGEN_MAX: 3,
+  SOLO_REGEN_MAX: 1.5,
   SOLO_REGEN_INTERVAL: 1,
 
   // Random buff spawns
@@ -76,7 +76,6 @@ export class ArenaSystem {
     const players = this.room.playersArr().filter(p => p.alive);
     let targetX = 0, targetZ = 0;
     if (players.length > 0) {
-      // Pick random alive player as target
       const p = players[Math.floor(Math.random() * players.length)];
       targetX = p.x;
       targetZ = p.z;
@@ -86,16 +85,16 @@ export class ArenaSystem {
     const t = ARENA_CONFIG.BUFF_SPAWN_MIN_DIST +
       Math.random() * (ARENA_CONFIG.BUFF_SPAWN_MAX_DIST - ARENA_CONFIG.BUFF_SPAWN_MIN_DIST);
     const playerDist = Math.hypot(targetX, targetZ) || 1;
-    const ratio = Math.min(t / playerDist, 1); // clamp to player distance
-    const x = targetX * ratio + (Math.random() - 0.5) * 4; // small offset
+    const ratio = Math.min(t / playerDist, 1);
+    const x = targetX * ratio + (Math.random() - 0.5) * 4;
     const z = targetZ * ratio + (Math.random() - 0.5) * 4;
 
     // Clamp to arena bounds
     const clampedX = Math.max(-ARENA.LIMIT, Math.min(ARENA.LIMIT, x));
     const clampedZ = Math.max(-ARENA.LIMIT, Math.min(ARENA.LIMIT, z));
 
-    // Create buff drop through loot system
-    this.room.loot._spawnBuff(clampedX, clampedZ);
+    // Create buff drop with specific type
+    this.room.loot._spawnBuffWithType(clampedX, clampedZ, type);
 
     // Announce to players
     const buffDef = BUFFS[type];

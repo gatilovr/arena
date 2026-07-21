@@ -75,7 +75,10 @@ export class LootSystem {
   _spawnBuff(x, z) {
     const keys = Object.keys(BUFFS);
     const type = keys[Math.floor(Math.random() * keys.length)];
+    this._spawnBuffWithType(x, z, type);
+  }
 
+  _spawnBuffWithType(x, z, type) {
     const drop = {
       id: 'bd' + (this.nextId++),
       kind: 'buff',

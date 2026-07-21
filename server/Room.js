@@ -4,6 +4,7 @@ import { WaveSystem } from './systems/WaveSystem.js';
 import { CombatSystem } from './systems/CombatSystem.js';
 import { LootSystem } from './systems/LootSystem.js';
 import { SkillSystem } from './systems/SkillSystem.js';
+import { ArenaSystem } from './systems/ArenaSystem.js';
 import { NET, PLAYER } from '../shared/constants.js';
 import { MAX_PLAYERS } from '../shared/server-constants.js';
 import { S, ROOM_STATE } from '../shared/protocol.js';
@@ -39,6 +40,7 @@ export class Room {
     this.combat = new CombatSystem(this);
     this.loot = new LootSystem(this);
     this.skills = new SkillSystem(this);
+    this.arena = new ArenaSystem(this);
 
     this.lastActivity = Date.now();
     this._timer = setInterval(() => this.update(), NET.TICK_MS);
@@ -145,6 +147,7 @@ export class Room {
     this.time = 0;
     this.loot.reset();
     this.wave.reset();
+    this.arena.reset();
     for (const p of this.playersArr()) {
       p.reviveUsed = false;
       p.spawn();
@@ -264,6 +267,7 @@ export class Room {
       this.loot.update(dt);
       this.wave.update(dt);
       this._updateZones(dt);
+      this.arena.update(dt);
 
       // призванные прислужники
       this._updateMinions(dt);

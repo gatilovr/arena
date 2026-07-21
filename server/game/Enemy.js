@@ -433,11 +433,7 @@ export class Enemy {
     } else if (this.type === 'runner') {
       const spdMul = hpPct < 0.3 ? 1.3 : 1.0;
       const sine = Math.sin(room.time * 4 + this.seed) * this.speed * 0.5;
-      if (this.erraticT > 0) {
-        this.erraticT -= dt;
-        this.x -= dirX * this.speed * spdMul * sf * dt;
-        this.z -= dirZ * this.speed * spdMul * sf * dt;
-      } else if (dist > attackRange) {
+      if (dist > attackRange) {
         this.x += (dirX * this.speed * spdMul * sf - dirZ * sine) * dt;
         this.z += (dirZ * this.speed * spdMul * sf + dirX * sine) * dt;
       } else {
@@ -445,7 +441,6 @@ export class Enemy {
         if (this.attackCd <= 0) {
           this.attackCd = 0.8;
           target.takeDamage(this.dmg, room);
-          this.erraticT = 0.8;
         }
       }
     } else if (this.type === 'tank') {
@@ -916,7 +911,7 @@ export class Enemy {
 
     // === IDLE — select next ability based on priority ===
 
-    // 1. Melee Cleave (close range, 2s CD)
+    // 1. Melee Cleave (close range)
     if (this.rebraddMcCd <= 0 && dist < mcCfg.range) {
       this.bossState = 'cleaveTele';
       this.bossStateT = mcCfg.teleDur;
@@ -925,7 +920,7 @@ export class Enemy {
       return;
     }
 
-    // 2. Coldflame 1 direction (far range, 5s CD)
+    // 2. Coldflame 1 direction (far range)
     if (this.rebraddCf1Cd <= 0 && dist > 6) {
       this.bossState = 'cf1Tele';
       this.bossStateT = cf1Cfg.teleDur;
@@ -936,7 +931,7 @@ export class Enemy {
       return;
     }
 
-    // 3. Coldflame 4 directions (8s CD)
+    // 3. Coldflame 4 directions
     if (this.rebraddCf4Cd <= 0) {
       const players = room.playersArr().filter(p => p.alive);
       if (players.length >= 1) {
@@ -949,7 +944,7 @@ export class Enemy {
       }
     }
 
-    // 4. Bone Storm (18s CD, highest priority when available)
+    // 4. Bone Storm (highest priority when available)
     if (this.rebraddBsCd <= 0) {
       const cluster = this._findBestCluster(room);
       if (cluster) {

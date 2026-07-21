@@ -802,6 +802,7 @@ export class Enemy {
     // Route to boss AI
     switch (this.type) {
       case 'rebradd': this._rebraddAI(dt, room, target, dist, dirX, dirZ, sf, em); break;
+      case 'butcher': this._butcherAI(dt, room, target, dist, dirX, dirZ, sf, em); break;
       case 'necro': this._necroAI(dt, room, target, dist, dirX, dirZ, sf, em); break;
       case 'golemKing': this._golemKingAI(dt, room, target, dist, dirX, dirZ, sf, em); break;
       case 'firelord': this._firelordAI(dt, room, target, dist, dirX, dirZ, sf, em); break;
@@ -1110,6 +1111,220 @@ export class Enemy {
 
   _randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
   _randFloat(min, max) { return Math.random() * (max - min) + min; }
+
+  // ========================================================================
+  // МЯСНИК: slam, charge, hook, cleave, minion spawn, blood rage
+  // Priority-based adaptive AI, works with 1 player
+  // ========================================================================
+  _butcherAI(dt, room, target, dist, dirX, dirZ, sf, em) {
+    const cfg = BOSS_ABILITIES.butcher;
+    const slamCfg = cfg.abilities.find(a => a.id === 'slam');
+    const chargeCfg = cfg.abilities.find(a => a.id === 'charge');
+    const hookCfg = cfg.abilities.find(a => a.id === 'hook');
+    const cleaveCfg = cfg.abilities.find(a => a.id === 'cleave');
+    const minionCfg = cfg.abilities.find(a => a.id === 'minionSpawn');
+    const rageCfg = cfg.abilities.find(a => a.id === 'bloodRage');
+
+    this.slamCd -= dt;
+    this.chargeCd -= dt;
+    this.hookCd -= dt;
+    this.cleaveCd -= dt;
+    this.minionCd -= dt;
+    this.bloodRageCd -= dt;
+
+    // Blood rage active
+    if (this.bloodRageT > 0) {
+      this.bloodRageT -= dt;
+    }
+
+    // Charge state machine
+    if (this.bossState === 'bChargeTele') {
+      this.bossStateT -= dt;
+      if (this.bossStateT <= 0) {
+        this.bossState = 'bCharging';
+        this.bossStateT = 0.6;
+        this.chargeHit = false;
+      }
+      return;
+    }
+    if (this.bossState === 'bCharging') {
+      this.bossStateT -= dt;
+      this.x += this.chargeDirX * chargeCfg.speed * em * dt;
+      this.z += this.chargeDirZ * chargeCfg.speed * em * dt;
+      for (const p of room.playersArr()) {
+        if (!p.alive) continue;
+        if (Math.hypot(p.x - this.x, p.z - this.z) < chargeCfg.hitRadius && !this.chargeHit) {
+          this.chargeHit = true;
+          p.takeDamage(this.dmg * chargeCfg.dmgMul * em, room);
+          p.stunT = chargeCfg.stunDur;
+        }
+      }
+      if (Math.abs(this.x) > ARENA.LIMIT - 2 || Math.abs(this.z) > ARENA.LIMIT - 2 || this.bossStateT <= 0) {
+        this.bossState = 'idle';
+      }
+      return;
+    }
+
+    // Hook state machine
+    if (this.bossState === 'hookThrow') {
+      this.bossStateT -= dt;
+      if (this.bossStateT <= 0) {
+        // Hook hit check: damage and pull the hookTarget
+        if (this._hookTarget && this._hookTarget.alive) {
+          const hookDist = Math.hypot(this._hookTarget.x - this.x, this._hookTarget.z - this.z);
+          if (hookDist < hookCfg.hookRange) {
+            // Deal damage
+            this._hookTarget.takeDamage(this.dmg * hookCfg.dmgMul * em, room);
+            // Pull player toward boss
+            const pullX = this.x - this._hookTarget.x;
+            const pullZ = this.z - this._hookTarget.z;
+            const pullD = Math.hypot(pullX, pullZ) || 1;
+            this._hookTarget.vx += (pullX / pullD) * hookCfg.pullSpeed;
+            this._hookTarget.vz += (pullZ / pullD) * hookCfg.pullSpeed;
+            // Visual: beam from boss to player
+            room.sendEvent({ type: 'skillfx', kind: 'beam',
+              x: this.x, y: 1.5, z: this.z,
+              x2: this._hookTarget.x, y2: 1.2, z2: this._hookTarget.z,
+              color: hookCfg.hookColor
+            });
+            room.sendEvent({ type: 'skillfx', kind: 'text', text: 'HOOK!', x: this._hookTarget.x, y: 2.5, z: this._hookTarget.z, color: hookCfg.hookColor });
+          }
+        }
+        this.bossState = 'idle';
+        this._hookTarget = null;
+      }
+      return;
+    }
+
+    // Slam telegraph
+    if (this.bossState === 'bSlamTele') {
+      this.bossStateT -= dt;
+      if (this.bossStateT <= 0) {
+        this.bossState = 'idle';
+        const slamDmgMul = slamCfg.dmgMulsByPhase[this.phase] || slamCfg.dmgMulsByPhase[1];
+        const slamDmg = this.dmg * slamDmgMul * em;
+        for (const p of room.playersArr()) {
+          if (!p.alive) continue;
+          if (Math.hypot(p.x - this.x, p.z - this.z) < slamCfg.radius) {
+            p.takeDamage(slamDmg, room);
+            const kdx = p.x - this.x, kdz = p.z - this.z;
+            const kd = Math.hypot(kdx, kdz) || 1;
+            p.vx += (kdx / kd) * slamCfg.knockback; p.vz += (kdz / kd) * slamCfg.knockback;
+          }
+        }
+        room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: slamCfg.radius, color: slamCfg.hitColor });
+      }
+      return;
+    }
+
+    // Cleave telegraph
+    if (this.bossState === 'bCleaveTele') {
+      this.bossStateT -= dt;
+      if (this.bossStateT <= 0) {
+        // Execute cleave
+        for (const p of room.playersArr()) {
+          if (!p.alive) continue;
+          const pd = Math.hypot(p.x - this.x, p.z - this.z);
+          if (pd > cleaveCfg.range) continue;
+          const dot = (p.x - this.x) * dirX + (p.z - this.z) * dirZ;
+          if (dot < 0) continue;
+          const angle = Math.acos(dot / (pd || 1));
+          if (angle < cleaveCfg.coneAngle) {
+            p.takeDamage(this.dmg * cleaveCfg.dmgMul * em, room);
+            const kx = p.x - this.x, kz = p.z - this.z;
+            const kd = Math.hypot(kx, kz) || 1;
+            p.vx += (kx / kd) * cleaveCfg.knockback;
+            p.vz += (kz / kd) * cleaveCfg.knockback;
+          }
+        }
+        room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x + dirX * 2, z: this.z + dirZ * 2, radius: 2, color: cleaveCfg.color });
+        this.bossState = 'idle';
+      }
+      return;
+    }
+
+    // Blood rage trigger (phase 3+)
+    if (this.phase >= rageCfg.minPhase && this.bloodRageCd <= 0 && this.bloodRageT <= 0) {
+      this.bloodRageCd = rageCfg.baseCd;
+      this.bloodRageT = rageCfg.duration;
+      this.dmg *= rageCfg.dmgMul;
+      this.speed *= rageCfg.speedMul;
+      room.sendEvent({ type: 'ann', text: rageCfg.text, color: rageCfg.textColor });
+      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 4, color: rageCfg.color });
+    }
+
+    // Priority-based ability selection (works with 1 player)
+    // 1. Hook (most impactful, pull player in)
+    if (this.hookCd <= 0 && dist < hookCfg.hookRange && dist > 5 && this.bossState === 'idle') {
+      this.hookCd = getAbilityCd(hookCfg, this.phase);
+      this.bossState = 'hookThrow';
+      this.bossStateT = 0.5;
+      this._hookTarget = target;
+      // Telegraph: line toward player
+      room.sendEvent({ type: 'skillfx', kind: 'beam',
+        x: this.x, y: 1.5, z: this.z,
+        x2: target.x, y2: 1.2, z2: target.z,
+        color: 0xff6600
+      });
+      return;
+    }
+
+    // 2. Charge (gap closer)
+    if (this.chargeCd <= 0 && dist > 5 && dist < 22 && this.bossState === 'idle') {
+      this.bossState = 'bChargeTele';
+      this.bossStateT = chargeCfg.teleDur;
+      this.chargeDirX = dirX; this.chargeDirZ = dirZ;
+      this.chargeCd = getAbilityCd(chargeCfg, this.phase);
+      room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: chargeCfg.hitRadius, dur: chargeCfg.teleDur, color: chargeCfg.teleColor });
+      return;
+    }
+
+    // 3. Slam (AoE ground slam)
+    if (this.slamCd <= 0 && dist < slamCfg.radius && this.bossState === 'idle') {
+      this.bossState = 'bSlamTele';
+      this.bossStateT = 0.6;
+      this.slamCd = getAbilityCd(slamCfg, this.phase);
+      room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: slamCfg.radius, dur: 0.6, color: slamCfg.teleColor });
+      return;
+    }
+
+    // 4. Cleave (cone attack)
+    if (this.cleaveCd <= 0 && dist < cleaveCfg.range && this.bossState === 'idle') {
+      this.bossState = 'bCleaveTele';
+      this.bossStateT = cleaveCfg.teleDur;
+      this.cleaveCd = getAbilityCd(cleaveCfg, this.phase);
+      room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x + dirX * 2, z: this.z + dirZ * 2, r: 1.5, dur: cleaveCfg.teleDur, color: cleaveCfg.teleColor });
+      return;
+    }
+
+    // 5. Minion spawn
+    if (this.minionCd <= 0 && this.bossState === 'idle') {
+      const aliveMinions = room.enemies.filter(e => e.isMinion && !e.dying).length;
+      const maxM = this.phase >= 3 ? 8 : 5;
+      const spawnCount = minionCfg.countsByPhase[this.phase] || minionCfg.countsByPhase[1];
+      if (aliveMinions < maxM) this._spawnMinions(room, spawnCount);
+      this.minionCd = getAbilityCd(minionCfg, this.phase);
+    }
+
+    // Idle movement — chase target with strafe
+    if (this.bossState === 'idle' && dist > 2.5) {
+      const chaseSpeed = this.speed * sf * em * (this._kitingScore > 0.5 ? 1.3 : 1);
+      const strafeAmt = this._strafeDir * this.speed * 0.3 * sf;
+      this.x += (dirX * chaseSpeed - dirZ * strafeAmt) * dt;
+      this.z += (dirZ * chaseSpeed + dirX * strafeAmt) * dt;
+    }
+
+    // Idle melee attack
+    if (this.bossState === 'idle' && dist < this.radius + 1.2) {
+      this.attackCd -= dt;
+      if (this.attackCd <= 0) {
+        this.attackCd = 0.9;
+        target.takeDamage(this.dmg * em, room);
+      }
+    }
+
+    this.y = Math.abs(Math.sin(room.time * 5)) * 0.08;
+  }
 
   // ========================================================================
   // НЕКРОМАНТ: дальний бой, спираль, телепорт, ритуал, drain, nova, curse

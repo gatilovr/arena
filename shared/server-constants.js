@@ -29,6 +29,7 @@ export const ENEMY_TYPES = {
 // ============================================================================
 export const BOSS = {
   rebradd:    { hp: 3500, sp: 3.0, dmg: 24, size: 1.4,  r: 1.5,  xp: 420, sc: 1200 },
+  butcher:    { hp: 3500, sp: 3.0, dmg: 22, size: 1.4,  r: 1.5,  xp: 420, sc: 1200 },
   necro:      { hp: 3200, sp: 3.2, dmg: 20, size: 1.3,  r: 1.1,  xp: 460, sc: 1200 },
   golemKing:  { hp: 5500, sp: 2.2, dmg: 32, size: 1.9,  r: 1.8,  xp: 620, sc: 1800 },
   firelord:   { hp: 4200, sp: 3.4, dmg: 26, size: 1.45, r: 1.3,  xp: 540, sc: 1500 },

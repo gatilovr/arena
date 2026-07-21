@@ -131,7 +131,7 @@ const ENEMY_COLORS = {
   assassin: 0x1a1a2e, berserker: 0x8b0000, summoner: 0x4a0080, shielder: 0x2f5080,
   sprinter: 0x00cc44, phantom: 0x6633aa, golem: 0x555555, firestarter: 0xff4400,
   frost_mage: 0x4488ff, cursed: 0x8844aa,
-  rebradd: 0xccccaa, necro: 0x2a1140,
+  rebradd: 0xccccaa, necro: 0x2a1140, butcher: 0xcc2200,
   golemKing: 0x555555, firelord: 0xff3300, shadowKing: 0x1a0a2e,
   frostQueen: 0x4488ff, dragonLord: 0xcc2200
 };
@@ -336,32 +336,115 @@ export function makeEnemy(type, isBoss) {
 
   // --- БОССЫ ---
 
+  } else if (type === 'butcher') {
+    // Мясник — массивный мясной монстр с тесаком
+    const meatMat = new THREE.MeshStandardMaterial({ color: 0xcc2200, roughness: 0.75, emissive: 0x881100, emissiveIntensity: 0.2 });
+    const scarMat = new THREE.MeshStandardMaterial({ color: 0x880000, roughness: 0.8, emissive: 0x660000, emissiveIntensity: 0.15 });
+    // massive torso
+    box(1.5, 1.4, 0.9, 0, 1.3, 0, meatMat);
+    // hunched shoulders
+    box(1.1, 0.7, 0.75, -0.85, 2.1, 0, meatMat);
+    box(1.1, 0.7, 0.75, 0.85, 2.1, 0, meatMat);
+    // head (small, pig-like)
+    box(0.48, 0.44, 0.48, 0, 2.55, 0.15, meatMat);
+    // snout
+    box(0.22, 0.16, 0.2, 0, 2.48, 0.42, meatMat);
+    // big glowing eyes (menacing)
+    addEye(0xff0000, -0.1, 2.6, 0.3, 0.06);
+    addEye(0xff0000, 0.1, 2.6, 0.3, 0.06);
+    // meat cleaver (right hand)
+    const cleaverMat = new THREE.MeshStandardMaterial({ color: 0xb0b8c4, metalness: 0.92, roughness: 0.1, emissive: 0xcc2200, emissiveIntensity: 0.3 });
+    box(0.12, 0.95, 0.12, -1.25, 1.8, 0, meatMat); // arm
+    box(0.6, 0.45, 0.06, -1.25, 2.55, 0, cleaverMat); // blade
+    box(0.12, 0.12, 0.12, -1.25, 1.25, 0, meatMat); // fist
+    // left arm (fist)
+    box(0.22, 1.0, 0.22, 1.1, 1.3, 0, meatMat);
+    box(0.28, 0.28, 0.28, 1.1, 0.85, 0, meatMat); // big fist
+    // scars / stitches
+    const stitchMat = new THREE.MeshBasicMaterial({ color: 0x440000, toneMapped: false });
+    box(0.04, 0.6, 0.02, 0.15, 1.5, 0.46, stitchMat);
+    box(0.04, 0.5, 0.02, -0.2, 1.7, 0.46, stitchMat);
+    box(0.3, 0.04, 0.02, 0, 1.3, 0.46, stitchMat);
+    // hooks on back
+    const hookMat = new THREE.MeshStandardMaterial({ color: 0x8a8f9c, metalness: 0.8, roughness: 0.3 });
+    const hook1 = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.35, 4), hookMat);
+    hook1.position.set(-0.3, 2.6, -0.35); hook1.rotation.z = 0.5; g.add(hook1);
+    const hook2 = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.35, 4), hookMat);
+    hook2.position.set(0.3, 2.6, -0.35); hook2.rotation.z = -0.5; g.add(hook2);
+    // thick legs
+    box(0.28, 0.8, 0.28, -0.35, 0.4, 0, meatMat);
+    box(0.28, 0.8, 0.28, 0.35, 0.4, 0, meatMat);
+    // blood drip effects
+    const bloodMat = new THREE.MeshBasicMaterial({ color: 0xaa0000, toneMapped: false, transparent: true, opacity: 0.7 });
+    for (let i = 0; i < 3; i++) {
+      const drip = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.01, 0.2, 4), bloodMat);
+      drip.position.set((Math.random() - 0.5) * 0.8, 0.8 + Math.random() * 0.5, 0.48);
+      g.add(drip);
+    }
+    height = 3.0;
+
   } else if (type === 'rebradd') {
-    // Lord Rebradd — bone skeleton with axes
-    const boneMat = new THREE.MeshStandardMaterial({ color: 0xccccaa, roughness: 0.7, emissive: 0x888866, emissiveIntensity: 0.15 });
-    // Ribcage
-    box(1.4, 1.2, 0.8, 0, 1.4, 0, boneMat);
-    box(0.15, 0.15, 0.9, 0, 1.7, 0, boneMat);
-    box(0.15, 0.15, 0.9, 0, 1.4, 0, boneMat);
-    box(0.15, 0.15, 0.9, 0, 1.1, 0, boneMat);
-    // Head (skull)
-    box(0.55, 0.6, 0.55, 0, 2.35, 0, boneMat);
-    addEye(0x4488ff, -0.13, 2.4, 0.28, 0.06);
-    addEye(0x4488ff, 0.13, 2.4, 0.28, 0.06);
+    // Lord Rebradd — tall skeletal figure with frost axes in hands
+    const boneMat = new THREE.MeshStandardMaterial({ color: 0xd4d0b8, roughness: 0.72, emissive: 0x888866, emissiveIntensity: 0.15 });
+    const axeMat = new THREE.MeshStandardMaterial({ color: 0x88bbdd, roughness: 0.3, metalness: 0.8, emissive: 0x4488cc, emissiveIntensity: 0.4 });
+    const axeGlowMat = new THREE.MeshBasicMaterial({ color: 0x66aaee, toneMapped: false, transparent: true, opacity: 0.3 });
+
+    // --- Skull ---
+    box(0.42, 0.48, 0.36, 0, 2.7, 0, boneMat);
+    // Eye sockets (dark recesses)
+    box(0.14, 0.1, 0.04, -0.1, 2.74, 0.18, dark);
+    box(0.14, 0.1, 0.04, 0.1, 2.74, 0.18, dark);
+    addEye(0x4488ff, -0.1, 2.74, 0.2, 0.045);
+    addEye(0x4488ff, 0.1, 2.74, 0.2, 0.045);
     // Jaw
-    box(0.45, 0.18, 0.35, 0, 2.05, 0.1, boneMat);
-    // Arms (bone)
-    box(0.25, 1.1, 0.25, -1.0, 1.3, 0, boneMat);
-    box(0.25, 1.1, 0.25, 1.0, 1.3, 0, boneMat);
-    // Axes (large frost axes)
-    const axeMat = new THREE.MeshStandardMaterial({ color: 0x6688aa, roughness: 0.5, emissive: 0x4466aa, emissiveIntensity: 0.3 });
-    box(0.15, 0.8, 0.15, -1.2, 2.1, 0, boneMat);
-    box(0.15, 0.8, 0.15, 1.2, 2.1, 0, boneMat);
-    box(0.6, 0.5, 0.12, -1.2, 2.5, 0, axeMat);
-    box(0.6, 0.5, 0.12, 1.2, 2.5, 0, axeMat);
-    // Legs (bone)
-    box(0.22, 0.9, 0.22, -0.35, 0.45, 0, boneMat);
-    box(0.22, 0.9, 0.22, 0.35, 0.45, 0, boneMat);
+    box(0.32, 0.1, 0.2, 0, 2.4, 0.07, boneMat);
+
+    // --- Spine ---
+    box(0.07, 1.25, 0.07, 0, 1.85, 0, boneMat);
+
+    // --- Ribcage (5 thin horizontal ribs, wider at top) ---
+    box(0.8, 0.05, 0.22, 0, 2.25, 0, boneMat);
+    box(0.72, 0.05, 0.2, 0, 2.08, 0, boneMat);
+    box(0.62, 0.05, 0.18, 0, 1.9, 0, boneMat);
+    box(0.52, 0.05, 0.16, 0, 1.72, 0, boneMat);
+    box(0.42, 0.05, 0.14, 0, 1.55, 0, boneMat);
+
+    // --- Pelvis ---
+    box(0.4, 0.08, 0.18, 0, 1.2, 0, boneMat);
+
+    // --- Arms (thin bone segments from shoulders to hands) ---
+    // Upper arms
+    box(0.08, 0.5, 0.08, -0.5, 2.05, 0, boneMat);
+    box(0.08, 0.5, 0.08, 0.5, 2.05, 0, boneMat);
+    // Forearms (angled slightly outward)
+    box(0.07, 0.5, 0.07, -0.62, 1.5, 0, boneMat);
+    box(0.07, 0.5, 0.07, 0.62, 1.5, 0, boneMat);
+
+    // --- Hands (small bone knobs at end of forearms) ---
+    box(0.1, 0.1, 0.1, -0.67, 1.15, 0, boneMat);
+    box(0.1, 0.1, 0.1, 0.67, 1.15, 0, boneMat);
+
+    // --- Frost Axes (attached to hands, extending upward) ---
+    // Left axe
+    box(0.05, 0.55, 0.05, -0.67, 1.4, 0, boneMat);  // handle
+    box(0.34, 0.26, 0.06, -0.67, 1.72, 0, axeMat);   // blade
+    box(0.38, 0.3, 0.1, -0.67, 1.72, 0, axeGlowMat);  // blade glow
+    // Right axe
+    box(0.05, 0.55, 0.05, 0.67, 1.4, 0, boneMat);
+    box(0.34, 0.26, 0.06, 0.67, 1.72, 0, axeMat);
+    box(0.38, 0.3, 0.1, 0.67, 1.72, 0, axeGlowMat);
+
+    // --- Legs (thin bone segments) ---
+    // Upper legs
+    box(0.09, 0.5, 0.09, -0.17, 0.9, 0, boneMat);
+    box(0.09, 0.5, 0.09, 0.17, 0.9, 0, boneMat);
+    // Lower legs
+    box(0.07, 0.5, 0.07, -0.17, 0.38, 0, boneMat);
+    box(0.07, 0.5, 0.07, 0.17, 0.38, 0, boneMat);
+    // Feet
+    box(0.12, 0.06, 0.18, -0.17, 0.03, 0.03, boneMat);
+    box(0.12, 0.06, 0.18, 0.17, 0.03, 0.03, boneMat);
+
     height = 3.0;
 
   } else if (type === 'necro') {

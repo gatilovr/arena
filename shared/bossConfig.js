@@ -68,6 +68,86 @@ export const BOSS_ABILITIES = {
   },
 
   // ========================================================================
+  // МЯСНИК — melee bruiser boss: slam, charge, hook, cleave, minion spawn, blood rage
+  // Heavy hitter that pulls players in with a hook
+  // ========================================================================
+  butcher: {
+    minionType: 'berserker',
+    announcements: {
+      1: { text: 'МЯСНИК ВЫХОДИТ НА БОЙ!', color: '#cc2200' },
+      2: { text: 'КРОВАВАЯ ЯРОСТЬ!', color: '#ff0000' },
+      3: { text: 'МЯСОРУБКА!', color: '#ff2222' },
+      4: { text: 'БЕЗУМНАЯ РЕЗНЯ!', color: '#ff0000' }
+    },
+    abilities: [
+      {
+        id: 'slam',
+        baseCd: 3.5,
+        cdByPhase: { 2: 2.8, 4: 1.8 },
+        dmgMulsByPhase: { 1: 1.2, 3: 1.5, 4: 1.8 },
+        radius: 5,
+        knockback: 10,
+        teleColor: 0xcc2200,
+        hitColor: 0xcc2200,
+        minPhase: 1
+      },
+      {
+        id: 'charge',
+        baseCd: 6,
+        cdByPhase: { 4: 3.5 },
+        dmgMul: 1.5,
+        stunDur: 0.8,
+        speed: 22,
+        hitRadius: 2.5,
+        teleDur: 0.7,
+        teleColor: 0xcc2200,
+        minPhase: 1
+      },
+      {
+        id: 'hook',
+        baseCd: 5,
+        cdByPhase: { 2: 4, 4: 3 },
+        dmgMul: 1.0,
+        pullSpeed: 30,
+        hookRange: 25,
+        hookColor: 0xcc2200,
+        minPhase: 1
+      },
+      {
+        id: 'cleave',
+        baseCd: 2,
+        cdByPhase: { 4: 1.2 },
+        dmgMul: 1.2,
+        coneAngle: 0.7,
+        range: 4.5,
+        knockback: 6,
+        color: 0xff4444,
+        teleDur: 0.4,
+        teleColor: 0xcc2222,
+        minPhase: 1
+      },
+      {
+        id: 'minionSpawn',
+        baseCd: 10,
+        cdByPhase: { 3: 6, 4: 4 },
+        countsByPhase: { 1: 2, 3: 3, 4: 4 },
+        minPhase: 1
+      },
+      {
+        id: 'bloodRage',
+        baseCd: 15,
+        duration: 5,
+        dmgMul: 1.35,
+        speedMul: 1.25,
+        color: 0xff0000,
+        text: 'КРОВАВАЯ ЯРОСТЬ!',
+        textColor: '#ff0000',
+        minPhase: 3
+      }
+    ]
+  },
+
+  // ========================================================================
   // НЕКРОМАНТ — ranged boss: spiral, shadow bolt, soul drain, ritual, nova, curse
   // ========================================================================
   necro: {

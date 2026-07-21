@@ -33,7 +33,7 @@ export class WaveSystem {
     if (isBoss) {
       this.count = 0;
       const bossIndex = Math.floor(this.wave / WAVE.BOSS_EVERY) - 1;
-      const bossPool = ['rebradd', 'necro', 'golemKing', 'firelord', 'shadowKing', 'frostQueen', 'dragonLord'];
+      const bossPool = ['rebradd', 'butcher', 'necro', 'golemKing', 'firelord', 'shadowKing', 'frostQueen', 'dragonLord'];
       this.bossType = bossPool[Math.min(bossIndex, bossPool.length - 1)];
       this.bossPending = 1.5; // Больше времени на подготовку к боссу
       this.room.sendEvent({ type: 'wave', num: this.wave, boss: true, bossType: this.bossType });

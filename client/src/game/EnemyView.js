@@ -87,6 +87,14 @@ export class EnemyView {
     this.mesh.position.set(lerp(a.x, b.x, k), lerp(a.y, b.y, k), lerp(a.z, b.z, k));
     this.mesh.rotation.y = lerpAngle(a.yaw, b.yaw, k);
 
+    // idle animation: subtle bob & sway for rebradd skeleton
+    if (this.type === 'rebradd' && !c.dy) {
+      const t = performance.now() * 0.001;
+      this.mesh.position.y += Math.sin(t * 1.5) * 0.04;
+      this.mesh.position.x += Math.sin(t * 0.7) * 0.02;
+      this.mesh.rotation.z = Math.sin(t * 0.9) * 0.03;
+    }
+
     // вспышка урона + low HP intensification + phase glow
     if (b.f) { this.bodyMat.emissive.setHex(0xffffff); this.bodyMat.emissiveIntensity = 0.9; }
     else {

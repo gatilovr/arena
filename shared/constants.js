@@ -39,6 +39,7 @@ export const PLAYER = {
 // Имена боссов для UI (клиент и сервер)
 export const BOSS_NAMES = {
   rebradd:    'LORD REBRADD',
+  butcher:    'МЯСНИК',
   necro:      'НЕКРОМАНТ',
   golemKing:  'КОРОЛЬ ГОЛЕМОВ',
   firelord:   'ПОВЕЛИТЕЛЬ ОГНЯ',

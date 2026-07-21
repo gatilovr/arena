@@ -41,21 +41,36 @@ function serverLog(msg) { console.log(`[${logTime()}] ${msg}`); }
 
 // --- WebSocket ---
 const RATE_LIMIT = 20; // max messages per second per connection
-const wss = new WebSocketServer({ server, path: '/ws' });
+const INPUT_RATE_LIMIT = 60; // max input messages per second per connection
+const WS_MAX_PAYLOAD = 4096;
+const wss = new WebSocketServer({ server, path: '/ws', maxPayload: WS_MAX_PAYLOAD });
 
 wss.on('connection', (ws) => {
   const conn = { ws, player: null, room: null };
-  const rate = { count: 0, resetTime: Date.now() };
+  const rate = { count: 0, resetTime: Date.now() + 1000 };
+  const inputRate = { count: 0, resetTime: Date.now() + 1000 };
 
   ws.on('message', (raw) => {
+    const rawSize = typeof raw === 'string' ? raw.length : raw.byteLength;
+    if (rawSize > WS_MAX_PAYLOAD) {
+      try { ws.close(1009, 'Message too large'); } catch {}
+      return;
+    }
+
     let m;
     try { m = JSON.parse(raw); } catch { return; }
 
     // --- Input validation: m.t must exist ---
     if (!m.t || typeof m.t !== 'string') return;
 
-    // INPUT —高频, не считаем в rate limit
+    // INPUT — высокочастотный, ограничиваем отдельно от команд UI
     if (m.t === C.INPUT) {
+      const now = Date.now();
+      if (now >= inputRate.resetTime) {
+        inputRate.count = 0;
+        inputRate.resetTime = now + 1000;
+      }
+      if (++inputRate.count > INPUT_RATE_LIMIT) return;
       if (conn.room && conn.player) {
         m.mx = typeof m.mx === 'number' ? Math.max(-1, Math.min(1, m.mx)) : 0;
         m.mz = typeof m.mz === 'number' ? Math.max(-1, Math.min(1, m.mz)) : 0;
@@ -82,12 +97,12 @@ wss.on('connection', (ws) => {
 
     // Validate fields per message type
     if (m.t === C.EQUIP || m.t === C.UNEQUIP || m.t === C.SELL) {
-      if (m.invIdx !== undefined) m.invIdx = Number.isFinite(m.invIdx) ? m.invIdx : -1;
+      if (m.invIdx !== undefined) m.invIdx = Number.isInteger(m.invIdx) ? m.invIdx : -1;
       if (m.slot !== undefined && typeof m.slot !== 'string') return;
     }
 
     if (m.t === C.ASSIGN || m.t === C.UNASSIGN) {
-      if (m.slot !== undefined) m.slot = Number.isFinite(m.slot) ? m.slot : -1;
+      if (m.slot !== undefined) m.slot = Number.isInteger(m.slot) ? m.slot : -1;
       if (m.skillId !== undefined && typeof m.skillId !== 'string') m.skillId = null;
     }
 
@@ -97,7 +112,11 @@ wss.on('connection', (ws) => {
 
     switch (m.t) {
       case C.JOIN: {
+        if (conn.room && conn.player) cleanup(conn);
         if (typeof m.name !== 'string') m.name = '';
+        if (typeof m.room !== 'string') m.room = '';
+        m.name = m.name.slice(0, 64);
+        m.room = m.room.slice(0, 12);
         serverLog(`Player joining: "${m.name}" room="${m.room || ''}"`);
         const res = manager.join(conn, m.name, m.room);
         if (res.error) {

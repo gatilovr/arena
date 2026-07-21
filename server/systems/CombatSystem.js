@@ -128,7 +128,9 @@ export class CombatSystem {
       dmg: baseDmg, r: 0.2,
       life: range / speed + 0.1,
       owner: p.id,
-      color: elColors[p.stats.el] || 0xff3300,
+      side: 'player',
+      poison: p.poisonBlade ? { dps: p.stats.meleeDmg * 0.25, slowF: 0.7 } : null,
+      c: elColors[p.stats.el] || 0xff3300,
     });
     if (p.poisonBlade) p.poisonBlade = false;
     this.room.sendEvent({ type: 'hitfx', x: p.x, z: p.z });
@@ -206,13 +208,38 @@ export class CombatSystem {
       b.x += b.vx * dt; b.y += (b.vy || 0) * dt; b.z += b.vz * dt;
       let remove = b.life <= 0 || Math.abs(b.x) > 46 || Math.abs(b.z) > 46;
       if (!remove) {
-        for (const p of this.room.playersArr()) {
-          if (!p.alive || p.id === b.owner) continue;
-          const d = Math.hypot(b.x - p.x, b.y - (p.y || 1.2), b.z - p.z);
-          if (d < 0.75 + (b.r || 0.16)) {
-            p.takeDamage(b.dmg, this.room);
+        if (b.side === 'player') {
+          const attacker = this.room.players.get(b.owner);
+          if (!attacker || !attacker.alive) {
             remove = true;
-            break;
+          } else {
+            for (const e of this.room.enemies) {
+              if (e.dying || e.spawnT > 0) continue;
+              const enemyY = (e.y || 0) + (e.size || 1) * 0.6;
+              const d = Math.hypot(b.x - e.x, b.y - enemyY, b.z - e.z);
+              if (d < e.radius + (b.r || 0.16)) {
+                this.damageEnemy(e, b.dmg, attacker, false);
+                if (b.poison && !e.dying) {
+                  e.burnT = 3;
+                  e.burnDps = b.poison.dps;
+                  e.burnBy = attacker;
+                  e.slowT = 2;
+                  e.slowF = b.poison.slowF;
+                }
+                remove = true;
+                break;
+              }
+            }
+          }
+        } else {
+          for (const p of this.room.playersArr()) {
+            if (!p.alive) continue;
+            const d = Math.hypot(b.x - p.x, b.y - (p.y || 1.2), b.z - p.z);
+            if (d < 0.75 + (b.r || 0.16)) {
+              p.takeDamage(b.dmg, this.room);
+              remove = true;
+              break;
+            }
           }
         }
       }

@@ -38,6 +38,7 @@ export class RoomManager {
     if (room.state === ROOM_STATE.OVER) return { error: 'Игра уже завершена' };
 
     const player = room.addPlayer(conn, name);
+    if (!player) return { error: 'Комната заполнена (макс. 4)' };
     conn.room = room;
     return { room, player };
   }

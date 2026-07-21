@@ -143,9 +143,16 @@ export class Game {
     const secs = stats.time % 60;
     document.getElementById('go-time').textContent = mins + ':' + String(secs).padStart(2, '0');
     const list = document.getElementById('go-player-list');
-    list.innerHTML = '';
+    list.textContent = '';
     for (const p of stats.players) {
-      list.innerHTML += `<div class="go-player"><span>${p.name}</span><span>УР ${p.level}</span><span>☠ ${p.kills}</span><span>⭐ ${p.score}</span></div>`;
+      const row = document.createElement('div');
+      row.className = 'go-player';
+      for (const text of [p.name, `УР ${p.level}`, `☠ ${p.kills}`, `⭐ ${p.score}`]) {
+        const span = document.createElement('span');
+        span.textContent = text;
+        row.appendChild(span);
+      }
+      list.appendChild(row);
     }
     el.classList.remove('hidden');
     document.getElementById('go-lobby').onclick = () => {

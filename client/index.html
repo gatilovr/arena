@@ -28,7 +28,7 @@
         <div id="wave-num">ВОЛНА 1</div>
         <div id="wave-left">врагов: 0</div>
       </div>
-      <button id="pause-btn" class="pause-hud-btn">⏸</button>
+      <button id="pause-btn" class="pause-hud-btn" aria-label="Пауза">⏸</button>
       <div id="fps-display">0 FPS</div>
       <div id="ping-display">--ms</div>
       <div id="team-box"></div>
@@ -59,22 +59,22 @@
     <div id="joystick-zone"><div id="joystick-base"></div><div id="joystick-knob"></div></div>
     <div id="touch-pad">
       <div class="tp-row">
-        <div class="act-btn sm" id="btn-dash"><span class="ico">💨</span></div>
-        <div class="act-btn sm" id="btn-jump"><span class="ico">⬆️</span></div>
+        <div class="act-btn sm" id="btn-dash" role="button" aria-label="Рывок"><span class="ico">💨</span></div>
+        <div class="act-btn sm" id="btn-jump" role="button" aria-label="Прыжок"><span class="ico">⬆️</span></div>
       </div>
-      <div class="act-btn big" id="btn-atk"><span class="ico">⚔️</span></div>
+      <div class="act-btn big" id="btn-atk" role="button" aria-label="Атака"><span class="ico">⚔️</span></div>
       <div class="tp-row tp-utils">
-        <div class="act-btn sm tp-util" id="btn-inv"><span class="ico">🎒</span></div>
-        <div class="act-btn sm tp-util" id="btn-book"><span class="ico">📖</span></div>
+        <div class="act-btn sm tp-util" id="btn-inv" role="button" aria-label="Инвентарь"><span class="ico">🎒</span></div>
+        <div class="act-btn sm tp-util" id="btn-book" role="button" aria-label="Гримуар"><span class="ico">📖</span></div>
       </div>
     </div>
 
     <!-- скил-панель -->
     <div id="skill-pad">
       <div class="sk-row">
-        <div class="sk-btn empty" id="sk0" data-skill-slot="0"><span class="sk-ico">＋</span><span class="key-badge">1</span><div class="cd-overlay" id="sk0-cd"></div></div>
-        <div class="sk-btn empty" id="sk1" data-skill-slot="1"><span class="sk-ico">＋</span><span class="key-badge">2</span><div class="cd-overlay" id="sk1-cd"></div></div>
-        <div class="sk-btn" id="btn-ult"><span class="sk-ico">⚡</span><span class="key-badge">F</span><div class="cd-overlay" id="ult-cd"></div></div>
+        <div class="sk-btn empty" id="sk0" data-skill-slot="0" role="button" aria-label="Скилл 1"><span class="sk-ico">＋</span><span class="key-badge">1</span><div class="cd-overlay" id="sk0-cd"></div></div>
+        <div class="sk-btn empty" id="sk1" data-skill-slot="1" role="button" aria-label="Скилл 2"><span class="sk-ico">＋</span><span class="key-badge">2</span><div class="cd-overlay" id="sk1-cd"></div></div>
+        <div class="sk-btn" id="btn-ult" role="button" aria-label="Ульта"><span class="sk-ico">⚡</span><span class="key-badge">F</span><div class="cd-overlay" id="ult-cd"></div></div>
       </div>
       <div id="ult-bar"><div id="ult-fill"></div></div>
       <div id="ult-label">УЛЬТА</div>

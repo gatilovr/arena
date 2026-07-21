@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { NET, PLAYER, lerp } from '../../../shared/constants.js';
+import { NET, PLAYER } from '../../../shared/constants.js';
+import { lerp } from '../../../shared/client-constants.js';
 import { ITEMS, BUFFS, RARITY, SKILLS, SETS, ELEMENT_COLORS } from '../../../shared/gameData.js';
 import { GameScene } from '../render/Scene.js';
 import { Effects } from '../render/Effects.js';
@@ -47,9 +48,10 @@ export class Game {
     // apply saved settings
     this._applySettings();
     this._bindEsc();
-    document.getElementById('pause-btn').addEventListener('click', () => {
+    this._pauseBtnHandler = () => {
       if (this.started) this.pauseUI.toggle();
-    });
+    };
+    document.getElementById('pause-btn').addEventListener('click', this._pauseBtnHandler);
 
     this.local = null;
     this.remotes = new Map();
@@ -60,6 +62,8 @@ export class Game {
     this.wave = { num: 1, left: 0, boss: false };
     this.me = null;
     this.meSnaps = null; // полный снапшот с инвентарём/скилами
+    this.roomPlayers = null; // список игроков из ROOM_STATE
+    this.roomHost = null;    // хост из ROOM_STATE
     this._knownSkills = new Set();
 
     this.started = false;
@@ -85,10 +89,9 @@ export class Game {
   }
 
   _bindEsc() {
-    addEventListener('keydown', (e) => {
+    this._escHandler = (e) => {
       if (e.code === 'Escape' && this.started) {
         e.preventDefault();
-        // if settings open, close settings and reopen pause
         if (this.settingsUI.isOpen) {
           this.settingsUI.close();
           this._applySettings();
@@ -97,7 +100,8 @@ export class Game {
         }
         this.pauseUI.toggle();
       }
-    });
+    };
+    addEventListener('keydown', this._escHandler);
   }
 
   // --- bullet object pool ---
@@ -111,6 +115,10 @@ export class Game {
         let m;
         if (free.length > 0) {
           m = free.pop();
+          // Reset userData to avoid stale tx/ty/tz from a previous bullet
+          m.userData.tx = undefined;
+          m.userData.ty = undefined;
+          m.userData.tz = undefined;
         } else {
           m = new THREE.Mesh(geo, mat.clone());
         }
@@ -127,9 +135,43 @@ export class Game {
 
   leaveGame() {
     this.net.send({ t: C.LEAVE });
-    this.reset();
+    this.destroy();
     this.lobby.show();
     this.lobby.showConnect();
+  }
+
+  destroy() {
+    // stop animation loop
+    this._destroyed = true;
+
+    // remove esc handler
+    if (this._escHandler) {
+      removeEventListener('keydown', this._escHandler);
+      this._escHandler = null;
+    }
+
+    // remove pause button handler
+    if (this._pauseBtnHandler) {
+      document.getElementById('pause-btn')?.removeEventListener('click', this._pauseBtnHandler);
+      this._pauseBtnHandler = null;
+    }
+
+    // remove net handlers
+    if (this._netHandlers) {
+      for (const [event, handler] of this._netHandlers) {
+        this.net.off(event, handler);
+      }
+      this._netHandlers = [];
+    }
+
+    // destroy sub-components
+    if (this.input) { this.input.destroy(); }
+    if (this.hud) { this.hud.destroy(); }
+    if (this.skillUI) { this.skillUI.destroy(); }
+    if (this.invUI) { this.invUI.destroy(); }
+
+    // clean up scene
+    this.reset();
   }
 
   onGameOver(m) {
@@ -164,11 +206,20 @@ export class Game {
   }
 
   _bindNet() {
-    this.net.on(S.START, () => this.startGame());
-    this.net.on(S.SNAP, (m) => this.onSnap(m));
-    this.net.on(S.EVENT, (m) => this.onEvent(m.ev));
-    this.net.on(S.STATE, (m) => this.onState(m));
-    this.net.on(S.GAMEOVER, (m) => this.onGameOver(m));
+    this._netHandlers = [];
+    const events = [
+      [S.START, () => this.startGame()],
+      [S.SNAP, (m) => this.onSnap(m)],
+      [S.EVENT, (m) => this.onEvent(m.ev)],
+      [S.PLAYER_STATE, (m) => this.onPlayerState(m)],
+      [S.ROOM_STATE, (m) => this.onRoomState(m)],
+      [S.STATE, (m) => this.onState(m)],
+      [S.GAMEOVER, (m) => this.onGameOver(m)],
+    ];
+    for (const [event, handler] of events) {
+      this.net.on(event, handler);
+      this._netHandlers.push([event, handler]);
+    }
   }
 
   startGame() {
@@ -193,14 +244,26 @@ export class Game {
     document.body.classList.toggle('mode-pc', mode === 'pc');
   }
 
-  // --- полный стейт (при входе/экипировке) ---
-  onState(m) {
+  // --- данные конкретного игрока (инвентарь, скилы, экипировка) ---
+  onPlayerState(m) {
     this.meSnaps = m;
     if (m.inv !== undefined) this.invUI.updateState(m);
     if (m.skills !== undefined) {
       this.skillUI.updateState(m);
       for (const skId of m.skills) this._knownSkills.add(skId);
     }
+  }
+
+  // --- состояние комнаты (список игроков, хост) ---
+  onRoomState(m) {
+    this.roomPlayers = m.players;
+    this.roomHost = m.host;
+  }
+
+  // --- legacy STATE (backward compat) ---
+  onState(m) {
+    if (m.inv !== undefined || m.skills !== undefined) this.onPlayerState(m);
+    if (m.players !== undefined) this.onRoomState(m);
   }
 
   // --- снапшот мира (20 Гц) ---
@@ -470,6 +533,7 @@ export class Game {
 
   // --- главный цикл ---
   _loop(now) {
+    if (this._destroyed) return;
     requestAnimationFrame(this._loop);
     const t = now * 0.001;
     let dt = this.lastTime ? (t - this.lastTime) : 0.016;
@@ -623,6 +687,7 @@ export class Game {
     this.hud.reset();
     if (this.local) { this.local.dispose(); this.local = null; }
     this.me = null; this.meSnaps = null;
+    this.roomPlayers = null; this.roomHost = null;
     this._knownSkills.clear();
     this.started = false;
     this.skillUI.skillSlots = [null, null];

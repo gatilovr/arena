@@ -25,28 +25,62 @@ export class SkillUI {
     this._longPressTimer = null;
     this._longPressFired = false;
 
+    // store handlers for cleanup
+    this._padHandlers = [];
+    this._slotHandlers = [];
+    this._bookCloseHandler = null;
+
     this._bindPad();
     this._bindBook();
     this._bindDragTargets();
+  }
+
+  destroy() {
+    // remove pad (sk0/sk1) listeners
+    for (const [el, fn, type] of this._padHandlers) {
+      el.removeEventListener(type, fn);
+    }
+    this._padHandlers = [];
+
+    // remove book-close listener
+    if (this._bookCloseHandler) {
+      const el = document.getElementById('book-close');
+      if (el) el.removeEventListener('click', this._bookCloseHandler);
+      this._bookCloseHandler = null;
+    }
+
+    // remove slot drag-target listeners
+    for (const [el, fn, type] of this._slotHandlers) {
+      el.removeEventListener(type, fn);
+    }
+    this._slotHandlers = [];
+
+    // cancel any active drag
+    this._cancelDrag();
+    clearTimeout(this._longPressTimer);
+    clearTimeout(this._toastT);
   }
 
   // --- панель скилов (HUD) ---
   _bindPad() {
     for (let i = 0; i < 2; i++) {
       const el = document.getElementById('sk' + i);
-      el.addEventListener('pointerdown', (e) => {
+      const handler = (e) => {
         e.preventDefault(); e.stopPropagation();
         if (!this.skillSlots[i]) {
           this._toast('📖 Гримуар (K) — назначь скил');
           return;
         }
-      });
+      };
+      el.addEventListener('pointerdown', handler);
+      this._padHandlers.push([el, handler, 'pointerdown']);
     }
   }
 
   // --- гримуар ---
   _bindBook() {
-    document.getElementById('book-close').addEventListener('click', () => this.close());
+    this._bookCloseHandler = () => this.close();
+    document.getElementById('book-close').addEventListener('click', this._bookCloseHandler);
   }
 
   // --- bind drop targets (slots) + cancel drag on book close ---
@@ -54,24 +88,30 @@ export class SkillUI {
     for (let i = 0; i < 2; i++) {
       const el = document.getElementById('book-slot' + i);
 
-      // drop target: highlight on hover while dragging from grid
-      el.addEventListener('pointerover', () => { if (this._dragging && this._dragFromSlot < 0) el.classList.add('drop-target'); });
-      el.addEventListener('pointerout', () => el.classList.remove('drop-target'));
-      el.addEventListener('pointerup', (e) => {
+      const onPointerOver = () => { if (this._dragging && this._dragFromSlot < 0) el.classList.add('drop-target'); };
+      const onPointerOut = () => el.classList.remove('drop-target');
+      const onPointerUp = (e) => {
         if (!this._dragging) return;
         el.classList.remove('drop-target');
         if (this._dragFromSlot < 0) {
-          // dragging from grid → assign to this slot
           this._dropOnSlot(i);
         }
-      });
-
-      // drag FROM slot (to unassign): long-press or move to start drag from slot
-      el.addEventListener('pointerdown', (e) => {
+      };
+      const onPointerDown = (e) => {
         if (!this.skillSlots[i]) return;
         e.preventDefault(); e.stopPropagation();
         this._startSlotDrag(i, el, e);
-      });
+      };
+
+      el.addEventListener('pointerover', onPointerOver);
+      el.addEventListener('pointerout', onPointerOut);
+      el.addEventListener('pointerup', onPointerUp);
+      el.addEventListener('pointerdown', onPointerDown);
+
+      this._slotHandlers.push([el, onPointerOver, 'pointerover']);
+      this._slotHandlers.push([el, onPointerOut, 'pointerout']);
+      this._slotHandlers.push([el, onPointerUp, 'pointerup']);
+      this._slotHandlers.push([el, onPointerDown, 'pointerdown']);
     }
   }
 

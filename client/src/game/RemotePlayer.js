@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { NET, lerp, ITEMS } from '../../../shared/constants.js';
+import { NET, ITEMS } from '../../../shared/constants.js';
+import { lerp } from '../../../shared/client-constants.js';
 import { makePlayerBody, makeSword, makeAxe, makeDagger, makeBow, makeStaff, makeTwoHandedSword, makeNameSprite, makeHpBar } from '../render/Meshes.js';
 
 const WEAPON_MODELS = {

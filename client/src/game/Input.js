@@ -27,18 +27,35 @@ export class Input {
 
   init(canvas) {
     this.canvas = canvas;
+    this._handlers = [];
     this._setupKeyboard();
     this._setupMouse();
     this._setupTouch();
+  }
+
+  destroy() {
+    // remove all global listeners
+    for (const [target, type, fn, opts] of this._handlers) {
+      target.removeEventListener(type, fn, opts);
+    }
+    this._handlers = [];
+    // clean up pointer lock
+    if (document.pointerLockElement === this.canvas) {
+      document.exitPointerLock();
+    }
+  }
+
+  _on(target, type, fn, opts) {
+    target.addEventListener(type, fn, opts);
+    this._handlers.push([target, type, fn, opts]);
   }
 
   setMode(mode) { this.mode = mode; }
 
   // --- клавиатура ---
   _setupKeyboard() {
-    addEventListener('keydown', (e) => {
+    this._keydownHandler = (e) => {
       if (e.repeat) return;
-      // не обрабатываем клавиши если фокус в поле ввода
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       this.keys[e.code] = true;
@@ -49,47 +66,51 @@ export class Input {
       if (e.code === 'Digit2') this.skillEdge[1] = true;
       if (e.code === 'KeyI') this.invToggle = true;
       if (e.code === 'KeyK') this.bookToggle = true;
-    });
-    addEventListener('keyup', (e) => {
+    };
+    this._keyupHandler = (e) => {
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       this.keys[e.code] = false;
-    });
+    };
+    this._on(window, 'keydown', this._keydownHandler);
+    this._on(window, 'keyup', this._keyupHandler);
   }
 
   // --- мышь: ЛКМ атака, ПКМ камера (Pointer Lock) ---
   _setupMouse() {
-    this.canvas.addEventListener('mousedown', (e) => {
+    this._canvasMouseDownHandler = (e) => {
       if (this.mode !== 'pc') return;
       if (e.button === 0) this.atkHeld = true;
       if (e.button === 2) {
         e.preventDefault();
         this.rmb = true;
-        // запрашиваем pointer lock при зажатии ПКМ
         if (document.pointerLockElement !== this.canvas) {
           this.canvas.requestPointerLock();
         }
       }
-    });
-    addEventListener('mouseup', (e) => {
+    };
+    this._mouseupHandler = (e) => {
       if (e.button === 0) this.atkHeld = false;
       if (e.button === 2) {
         this.rmb = false;
-        // отпускаем pointer lock при отпускании ПКМ
         if (document.pointerLockElement === this.canvas) {
           document.exitPointerLock();
         }
       }
-    });
-    // вращение камеры через movementX/movementY (без движения курсора)
-    addEventListener('mousemove', (e) => {
+    };
+    this._mousemoveHandler = (e) => {
       if (this.rmb && this.mode === 'pc' && document.pointerLockElement === this.canvas) {
         const m = 0.003 * this.sens;
         this.yaw -= e.movementX * m;
         this.pitch = clamp(this.pitch - e.movementY * m, -1.25, 1.25);
       }
-    });
-    addEventListener('contextmenu', (e) => e.preventDefault());
+    };
+    this._contextmenuHandler = (e) => e.preventDefault();
+
+    this._on(this.canvas, 'mousedown', this._canvasMouseDownHandler);
+    this._on(window, 'mouseup', this._mouseupHandler);
+    this._on(window, 'mousemove', this._mousemoveHandler);
+    this._on(window, 'contextmenu', this._contextmenuHandler);
   }
 
   // --- тач: джойстик, свайп-камера, кнопки ---
@@ -98,7 +119,7 @@ export class Input {
     const knob = document.getElementById('joystick-knob');
     const maxD = 42;
 
-    jz.addEventListener('pointerdown', (e) => {
+    this._jzPointerDown = (e) => {
       e.preventDefault();
       try { jz.setPointerCapture(e.pointerId); } catch {}
       this.joyId = e.pointerId;
@@ -106,61 +127,65 @@ export class Input {
       this.joyOX = r.left + r.width / 2; this.joyOY = r.top + r.height / 2;
       knob.classList.add('active');
       this._joyMove(e, knob, maxD);
-    });
-    jz.addEventListener('pointermove', (e) => { if (e.pointerId === this.joyId) this._joyMove(e, knob, maxD); });
-    const joyEnd = (e) => {
+    };
+    this._jzPointerMove = (e) => { if (e.pointerId === this.joyId) this._joyMove(e, knob, maxD); };
+    this._joyEnd = (e) => {
       if (e.pointerId === this.joyId) {
         this.joyId = null; this.mx = 0; this.mz = 0;
         knob.style.transform = 'translate(-50%,-50%)';
         knob.classList.remove('active');
       }
     };
-    jz.addEventListener('pointerup', joyEnd);
-    jz.addEventListener('pointercancel', joyEnd);
+
+    this._on(jz, 'pointerdown', this._jzPointerDown);
+    this._on(jz, 'pointermove', this._jzPointerMove);
+    this._on(jz, 'pointerup', this._joyEnd);
+    this._on(jz, 'pointercancel', this._joyEnd);
 
     // свайп-камера
     const lz = document.getElementById('look-zone');
-    lz.addEventListener('pointerdown', (e) => {
+    this._lzPointerDown = (e) => {
       e.preventDefault();
       if (this.lookId === null) {
         this.lookId = e.pointerId; this.lookLX = e.clientX; this.lookLY = e.clientY;
         try { lz.setPointerCapture(e.pointerId); } catch {}
       }
-    });
-    lz.addEventListener('pointermove', (e) => {
+    };
+    this._lzPointerMove = (e) => {
       if (e.pointerId !== this.lookId) return;
       const m = 0.0046 * this.sens;
       this.yaw -= (e.clientX - this.lookLX) * m;
       this.pitch = clamp(this.pitch - (e.clientY - this.lookLY) * m, -1.25, 1.25);
       this.lookLX = e.clientX; this.lookLY = e.clientY;
-    });
-    const lookEnd = (e) => { if (e.pointerId === this.lookId) this.lookId = null; };
-    lz.addEventListener('pointerup', lookEnd);
-    lz.addEventListener('pointercancel', lookEnd);
+    };
+    this._lookEnd = (e) => { if (e.pointerId === this.lookId) this.lookId = null; };
+
+    this._on(lz, 'pointerdown', this._lzPointerDown);
+    this._on(lz, 'pointermove', this._lzPointerMove);
+    this._on(lz, 'pointerup', this._lookEnd);
+    this._on(lz, 'pointercancel', this._lookEnd);
 
     // кнопки
     const bind = (id, down, up) => {
       const el = document.getElementById(id);
-      el.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); try { el.setPointerCapture(e.pointerId); } catch {} down(); });
-      el.addEventListener('pointerup', (e) => { e.preventDefault(); e.stopPropagation(); if (up) up(); });
-      el.addEventListener('pointercancel', () => { if (up) up(); });
+      this._on(el, 'pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); try { el.setPointerCapture(e.pointerId); } catch {} down(); });
+      this._on(el, 'pointerup', (e) => { e.preventDefault(); e.stopPropagation(); if (up) up(); });
+      this._on(el, 'pointercancel', () => { if (up) up(); });
     };
     bind('btn-atk', () => this.atkHeld = true, () => this.atkHeld = false);
     bind('btn-jump', () => this.jumpEdge = true);
     bind('btn-dash', () => this.dashEdge = true);
 
-    // скилы — без stopPropagation, чтобы SkillUI тоже ловил клик
     const bindSkill = (id, fn) => {
       const el = document.getElementById(id);
-      el.addEventListener('pointerdown', (e) => { e.preventDefault(); try { el.setPointerCapture(e.pointerId); } catch {} fn(); });
-      el.addEventListener('pointerup', (e) => { e.preventDefault(); });
-      el.addEventListener('pointercancel', () => {});
+      this._on(el, 'pointerdown', (e) => { e.preventDefault(); try { el.setPointerCapture(e.pointerId); } catch {} fn(); });
+      this._on(el, 'pointerup', (e) => { e.preventDefault(); });
+      this._on(el, 'pointercancel', () => {});
     };
     bindSkill('sk0', () => this.skillEdge[0] = true);
     bindSkill('sk1', () => this.skillEdge[1] = true);
     bind('btn-ult', () => this.ultEdge = true);
 
-    // инвентарь / гримуар —.touch кнопки
     bind('btn-inv', () => this.invToggle = true);
     bind('btn-book', () => this.bookToggle = true);
   }

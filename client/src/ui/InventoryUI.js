@@ -20,49 +20,81 @@ export class InventoryUI {
     this._dragEl = null;
     this._ghostEl = null;
 
+    // store handlers for cleanup
+    this._boundHandlers = [];
+
     this._bind();
   }
 
+  destroy() {
+    for (const [el, fn, type] of this._boundHandlers) {
+      el.removeEventListener(type, fn);
+    }
+    this._boundHandlers = [];
+    this._cancelDrag();
+  }
+
   _bind() {
-    document.getElementById('inv-close').addEventListener('click', () => this.close());
+    const closeHandler = () => this.close();
+    document.getElementById('inv-close').addEventListener('click', closeHandler);
+    this._boundHandlers.push([document.getElementById('inv-close'), closeHandler, 'click']);
 
     // слоты экипировки — клик = снять предмет
     for (const slot of ['weapon', 'relic1', 'relic2']) {
       const el = document.getElementById('slot-' + slot);
-      el.addEventListener('pointerdown', (e) => {
+
+      const onPointerDown = (e) => {
         if (this.equip[slot]) {
           this.net.send({ t: 'unequip', slot });
           this.sfx.equip();
         }
-      });
-      // drag-and-drop: сюда можно перетащить предмет из инвентаря
-      el.addEventListener('pointerover', () => { if (this._dragging) el.classList.add('drop-target'); });
-      el.addEventListener('pointerout', () => el.classList.remove('drop-target'));
-      el.addEventListener('pointerup', (e) => {
+      };
+      const onPointerOver = () => { if (this._dragging) el.classList.add('drop-target'); };
+      const onPointerOut = () => el.classList.remove('drop-target');
+      const onPointerUp = (e) => {
         if (!this._dragging) return;
         el.classList.remove('drop-target');
         this._dropOnSlot(slot);
-      });
+      };
+
+      el.addEventListener('pointerdown', onPointerDown);
+      el.addEventListener('pointerover', onPointerOver);
+      el.addEventListener('pointerout', onPointerOut);
+      el.addEventListener('pointerup', onPointerUp);
+
+      this._boundHandlers.push([el, onPointerDown, 'pointerdown']);
+      this._boundHandlers.push([el, onPointerOver, 'pointerover']);
+      this._boundHandlers.push([el, onPointerOut, 'pointerout']);
+      this._boundHandlers.push([el, onPointerUp, 'pointerup']);
     }
 
     // корзина — продать
     const trash = document.getElementById('trash-zone');
-    trash.addEventListener('pointerover', () => { if (this._dragging) trash.classList.add('drop-target'); });
-    trash.addEventListener('pointerout', () => trash.classList.remove('drop-target'));
-    trash.addEventListener('pointerup', () => {
+    const onTrashOver = () => { if (this._dragging) trash.classList.add('drop-target'); };
+    const onTrashOut = () => trash.classList.remove('drop-target');
+    const onTrashUp = () => {
       if (!this._dragging) return;
       trash.classList.remove('drop-target');
       this._dropOnTrash();
-    });
-    // клик по корзине без драга — продать выбранный
-    trash.addEventListener('click', () => {
+    };
+    const onTrashClick = () => {
       if (!this._dragging && this.selItem >= 0 && this.selItem < this.inv.length) {
         this.net.send({ t: 'sell', invIdx: this.selItem });
         this.sfx.coin();
         this.selItem = -1;
         this._render();
       }
-    });
+    };
+
+    trash.addEventListener('pointerover', onTrashOver);
+    trash.addEventListener('pointerout', onTrashOut);
+    trash.addEventListener('pointerup', onTrashUp);
+    trash.addEventListener('click', onTrashClick);
+
+    this._boundHandlers.push([trash, onTrashOver, 'pointerover']);
+    this._boundHandlers.push([trash, onTrashOut, 'pointerout']);
+    this._boundHandlers.push([trash, onTrashUp, 'pointerup']);
+    this._boundHandlers.push([trash, onTrashClick, 'click']);
   }
 
   open() {

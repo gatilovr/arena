@@ -4,7 +4,8 @@ import { WaveSystem } from './systems/WaveSystem.js';
 import { CombatSystem } from './systems/CombatSystem.js';
 import { LootSystem } from './systems/LootSystem.js';
 import { SkillSystem } from './systems/SkillSystem.js';
-import { NET, MAX_PLAYERS, PLAYER } from '../shared/constants.js';
+import { NET, PLAYER } from '../shared/constants.js';
+import { MAX_PLAYERS } from '../shared/server-constants.js';
 import { S, ROOM_STATE } from '../shared/protocol.js';
 
 
@@ -91,6 +92,37 @@ export class Room {
       return;
     }
     this.broadcastLobby();
+  }
+
+  // Soft disconnect: keep player in room for potential reconnect
+  disconnectPlayer(id) {
+    const player = this.players.get(id);
+    if (!player) return;
+    player._disconnected = true;
+    // Transfer host to another connected player if needed
+    if (this.host === id) {
+      const connected = this.playersArr().filter(p => !p._disconnected && p.id !== id);
+      if (connected.length) this.host = connected[0].id;
+    }
+    this.broadcastLobby();
+  }
+
+  // Re-attach a disconnected player to a new connection
+  rejoinPlayer(conn, id) {
+    const player = this.players.get(id);
+    if (!player) return null;
+    player._disconnected = false;
+    player.conn = conn;
+    conn.player = player;
+    conn.room = this;
+    this.touch();
+    if (this.state === ROOM_STATE.PLAYING) {
+      player.spawn();
+      try { conn.ws.send(JSON.stringify({ t: S.START })); } catch (e) {}
+      this._sendFullState(player);
+    }
+    this.broadcastLobby();
+    return player;
   }
 
   destroy() {
@@ -180,14 +212,20 @@ export class Room {
 
   _broadcastPlayerState(player) {
     const data = player.fullSnap();
-    try { player.conn.ws.send(JSON.stringify({ t: S.STATE, ...data })); } catch (e) {}
+    try { player.conn.ws.send(JSON.stringify({ t: S.PLAYER_STATE, ...data })); } catch (e) {}
   }
 
   _sendFullState(player) {
-    const data = player.fullSnap();
-    data.players = this.playersArr().map(p => p.fullSnap());
-    data.host = this.host;
-    try { player.conn.ws.send(JSON.stringify({ t: S.STATE, ...data })); } catch (e) {}
+    // 1) отправляем данные самого игрока (инвентарь, скилы, экипировка)
+    const pData = player.fullSnap();
+    try { player.conn.ws.send(JSON.stringify({ t: S.PLAYER_STATE, ...pData })); } catch (e) {}
+    // 2) отправляем состояние комнаты (список игроков, хост)
+    const rData = {
+      t: S.ROOM_STATE,
+      players: this.playersArr().map(p => p.fullSnap()),
+      host: this.host,
+    };
+    try { player.conn.ws.send(JSON.stringify(rData)); } catch (e) {}
   }
 
   // --- главный цикл ---

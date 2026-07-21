@@ -1,4 +1,5 @@
-import { PLAYER, ENEMY_TYPES, BOSS, ARENA, clamp } from '../../shared/constants.js';
+import { PLAYER, ARENA, clamp } from '../../shared/constants.js';
+import { ENEMY_TYPES, BOSS } from '../../shared/server-constants.js';
 
 // ============================================================================
 // СИСТЕМА БОЯ — серверная валидация ударов, урон по врагам, пули, ульта.

@@ -29,6 +29,15 @@ const game = new Game(canvas, net, lobby, audio);
 game.input.setMode(mode);
 game.applyMode();
 
+// --- session resume: load stored token from localStorage ---
+try {
+  const stored = localStorage.getItem('arena_session');
+  if (stored) {
+    const { token } = JSON.parse(stored);
+    if (token) net.sessionToken = token;
+  }
+} catch {}
+
 // lobby settings button
 document.getElementById('lobby-settings').addEventListener('click', () => {
   game.settingsUI.onBack = () => game._applySettings();
@@ -42,9 +51,20 @@ net.on(S.JOINED, (data) => {
     lobby.onError('Версия протокола не совпадает. Обновите клиент и сервер.');
     return;
   }
+  // Store session token for reconnect
+  if (data.sessionToken) {
+    net.sessionToken = data.sessionToken;
+    net._resuming = false;
+    try { localStorage.setItem('arena_session', JSON.stringify({ token: data.sessionToken })); } catch {}
+  }
   game.reset();
   lobby.onJoined(data);
-  lobby.show();
+  // If resuming a game in progress, skip lobby and go straight to game
+  if (data.state === ROOM_STATE.PLAYING) {
+    lobby.hide();
+  } else {
+    lobby.show();
+  }
   game.audio.init(); game.audio.resume(); sfx.click();
 });
 
@@ -58,12 +78,21 @@ net.on(S.LOBBY, (data) => {
   }
 });
 
-net.on(S.ERROR, (m) => lobby.onError(m.msg));
+net.on(S.ERROR, (m) => {
+  lobby.onError(m.msg);
+  // If this error is from a failed resume attempt, clear the token
+  if (net._resuming) {
+    net._resuming = false;
+    net.sessionToken = null;
+    try { localStorage.removeItem('arena_session'); } catch {}
+  }
+});
 
-// при обрыве связи во время игры — возвращаемся в лобби
+// при обрыве связи во время игры — если есть session token, ждём реконнекта;
+// иначе возвращаемся в лобби
 net.onStatus = (s) => {
   lobby._status(s);
-  if (s === 'disconnected' && game.started) {
+  if (s === 'disconnected' && game.started && !net.sessionToken) {
     game.reset();
     lobby.show();
   }

@@ -3,6 +3,8 @@
 // сообщений. Клиент всегда коннектится к location.host, поэтому один и тот же
 // код работает и на localhost, и по LAN, и (в будущем) через интернет.
 // ============================================================================
+import { C } from '../../../shared/protocol.js';
+
 export class NetClient {
   constructor() {
     this.ws = null;
@@ -14,6 +16,8 @@ export class NetClient {
     this.ping = 0;
     this._lastPingSent = 0;
     this._pingTimer = null;
+    this.sessionToken = null;
+    this._resuming = false;
   }
 
   connect() {
@@ -32,6 +36,11 @@ export class NetClient {
       this.reconnectDelay = 1000;
       this.onStatus('connected');
       this._startPing();
+      // Auto-resume if we have a stored session token
+      if (this.sessionToken) {
+        this._resuming = true;
+        this.send({ t: C.JOIN, token: this.sessionToken });
+      }
     };
 
     this.ws.onmessage = (ev) => {
@@ -66,6 +75,11 @@ export class NetClient {
   on(type, cb) {
     if (!this.handlers.has(type)) this.handlers.set(type, new Set());
     this.handlers.get(type).add(cb);
+  }
+
+  off(type, cb) {
+    const set = this.handlers.get(type);
+    if (set) set.delete(cb);
   }
 
   send(obj) {

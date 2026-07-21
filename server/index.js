@@ -138,6 +138,29 @@ wss.on('connection', (ws) => {
     switch (m.t) {
       case C.JOIN: {
         if (conn.room && conn.player) cleanup(conn);
+        // Session resume: if token provided, try to resume
+        if (m.token) {
+          const resume = manager.resumeSession(m.token, conn);
+          if (resume) {
+            const { room, player, sessionToken } = resume;
+            log.info(`Player ${player.name} (${player.id}) resumed session in room ${room.code}`);
+            ws.send(JSON.stringify({
+              t: S.JOINED,
+              protocolVersion: PROTOCOL_VERSION,
+              id: player.id,
+              room: room.code,
+              host: room.host,
+              state: room.state,
+              sessionToken,
+              players: room.playersArr().map(p => ({ id: p.id, name: p.name, slot: p.slot, color: p.color }))
+            }));
+            return;
+          }
+          // Token invalid or expired
+          ws.send(JSON.stringify({ t: S.ERROR, msg: 'Сессия истекла. Войдите заново.' }));
+          return;
+        }
+        // Normal join flow
         if (typeof m.name !== 'string') m.name = '';
         if (typeof m.room !== 'string') m.room = '';
         m.name = m.name.slice(0, MAX_NAME_LEN);
@@ -149,7 +172,9 @@ wss.on('connection', (ws) => {
           return;
         }
         const { room, player } = res;
-        log.info(`Player ${player.name} (${player.id}) joined room ${room.code}`);
+        // Generate session token
+        const sessionToken = manager.createSession(room.code, player);
+        log.info(`Player ${player.name} (${player.id}) joined room ${room.code}, token: ${sessionToken}`);
         ws.send(JSON.stringify({
           t: S.JOINED,
           protocolVersion: PROTOCOL_VERSION,
@@ -157,6 +182,7 @@ wss.on('connection', (ws) => {
           room: room.code,
           host: room.host,
           state: room.state,
+          sessionToken,
           players: room.playersArr().map(p => ({ id: p.id, name: p.name, slot: p.slot, color: p.color }))
         }));
         break;
@@ -199,8 +225,12 @@ wss.on('connection', (ws) => {
 
 function cleanup(conn) {
   if (conn.room && conn.player) {
-    log.info(`Removing player ${conn.player.name} (${conn.player.id}) from room ${conn.room.code}`);
-    conn.room.removePlayer(conn.player.id);
+    log.info(`Player ${conn.player.name} (${conn.player.id}) disconnected from room ${conn.room.code}`);
+    // Soft disconnect: keep player in room for potential reconnect
+    conn.room.disconnectPlayer(conn.player.id);
+    // Store session token for reconnect
+    const token = manager.createSession(conn.room.code, conn.player);
+    log.info(`Session token created for ${conn.player.name}: ${token}`);
   }
   conn.room = null;
   conn.player = null;

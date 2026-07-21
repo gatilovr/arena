@@ -234,6 +234,15 @@ export class HUD {
     if (el) el.textContent = fps + ' FPS';
   }
 
+  destroy() {
+    clearTimeout(this._toastTimer);
+    for (const [, card] of this.teamCards) card.el.remove();
+    this.teamCards.clear();
+    this.cache = {};
+    const bar = document.getElementById('buff-bar');
+    if (bar) bar.innerHTML = '';
+  }
+
   toast(msg) {
     const el = document.getElementById('toast');
     if (!el) return;

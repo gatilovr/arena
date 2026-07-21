@@ -1,5 +1,6 @@
 import { Enemy } from '../game/Enemy.js';
-import { WAVE, ARENA } from '../../shared/constants.js';
+import { ARENA } from '../../shared/constants.js';
+import { WAVE } from '../../shared/server-constants.js';
 
 // ============================================================================
 // СИСТЕМА ВОЛН — спавн врагов, детект зачистки, переход дальше, боссы.

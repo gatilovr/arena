@@ -1,4 +1,6 @@
-import { ENEMY_TYPES, BOSS, ARENA, BOSS_PHASES, BOSS_ENRAGE, clamp } from '../../shared/constants.js';
+import { ARENA, clamp } from '../../shared/constants.js';
+import { ENEMY_TYPES, BOSS, BOSS_PHASES, BOSS_ENRAGE } from '../../shared/server-constants.js';
+import { BOSS_ABILITIES, getAbilityCd } from '../../shared/bossConfig.js';
 
 let EID = 0;
 
@@ -198,8 +200,60 @@ export class Enemy {
 
     // инициализация боссов
     if (isBoss) {
-      if (type === 'golemKing') {
-        this.gkShieldHp = 800;
+      const bossCfg = BOSS_ABILITIES[type];
+      if (bossCfg) {
+        // Initialize cooldowns from config
+        for (const ab of bossCfg.abilities) {
+          const cd = ab.baseCd || 0;
+          switch (ab.id) {
+            case 'slam': this.slamCd = cd; this.gkSlamCd = cd; break;
+            case 'charge': this.chargeCd = cd; this.gkChargeCd = cd; break;
+            case 'hook': this.hookCd = cd; break;
+            case 'cleave': this.cleaveCd = cd; break;
+            case 'minionSpawn': this.minionCd = cd; this.gkSummonCd = cd; break;
+            case 'bloodRage': this.bloodRageCd = cd; break;
+            case 'spiral': this.spiralCd = cd; break;
+            case 'shadowBolt': this.necroShadowBoltCd = cd; break;
+            case 'soulDrain': this.necroSoulDrainCd = cd; break;
+            case 'deathNova': this.necroDeathNovaCd = cd; break;
+            case 'curseSpread': this.necroCurseSpreadCd = cd; break;
+            case 'ritual': this.necroRitualCd = cd; break;
+            case 'teleport': this.necroTeleportCd = cd; this.skTeleportCd = cd; break;
+            case 'boulder': this.gkBoulderCd = cd; break;
+            case 'seismic': this.gkSeismicCd = cd; break;
+            case 'fortify': this.gkFortifyCd = cd; break;
+            case 'earthquake': this.gkEarthquakeCd = cd; break;
+            case 'eruption': this.gkEruptionCd = cd; break;
+            case 'fireball': this.flFireballCd = cd; break;
+            case 'fireWave': this.flFireWaveCd = cd; break;
+            case 'firePillars': this.flPillarCd = cd; break;
+            case 'meteorRain': this.flMeteorCd = cd; break;
+            case 'heatWave': this.flHeatWaveCd = cd; break;
+            case 'fireBreath': this.dlFireBreathCd = cd; break;
+            case 'tailSweep': this.dlTailSweepCd = cd; break;
+            case 'wingGust': this.dlWingGustCd = cd; break;
+            case 'dragonRoar': this.dlRoarCd = cd; break;
+            case 'fireStorm': this.dlFireStormCd = cd; break;
+            case 'flight': this.dlFlyCd = cd; break;
+            case 'diveBomb': this.dlDiveBombCd = cd; break;
+            case 'iceShard': this.fqIceShardCd = cd; break;
+            case 'iceLance': this.fqIceLanceCd = cd; break;
+            case 'freeze': this.fqFreezeCd = cd; break;
+            case 'blizzard': this.fqBlizzardCd = cd; break;
+            case 'frozenGround': this.fqFrozenGroundCd = cd; break;
+            case 'absoluteZero': this.fqAbsoluteZeroCd = cd; break;
+            case 'iceBarrier': this.fqIceBarrierCd = cd; break;
+            case 'backstab': this.skBackstabCd = cd; break;
+            case 'clone': this.skCloneCd = cd; break;
+            case 'vortex': this.skVortexCd = cd; break;
+            case 'darkness': this.skDarknessCd = cd; break;
+            case 'soulRip': this.skSoulRipCd = cd; break;
+            case 'shadowStep': this.skShadowStepCd = cd; break;
+          }
+        }
+        if (bossCfg.shieldHp) {
+          this.gkShieldHp = bossCfg.shieldHp;
+        }
       }
       if (type === 'frostQueen') {
         this.fqIceBarrierHp = 0;
@@ -754,27 +808,10 @@ export class Enemy {
   }
 
   _onPhaseChange(room, phase) {
-    const names = {
-      butcher: ['МЯСНИК ЯРОСТЕН!', 'БЕЗУМИЕ!', 'КРОВАВАЯ ЖАТВА!'],
-      necro: ['ТЁМНАЯ МАГИЯ!', 'ТЁМНЫЙ РИТУАЛ!', 'ДУШИ ПОГЛОЩЕНЫ!'],
-      golemKing: ['ГОЛЕМ БЕШЕН!', 'ЗЕМЛЕТРЯСЕНИЕ!', 'ТЕКТОНИЧЕСКИЙ РАЗЛОМ!'],
-      firelord: ['ВОЛНА ОГНЯ!', 'ОГНЕННАЯ АУРА!', 'ФЕНИКС ПРОБУЖДАЕТСЯ!'],
-      shadowKing: ['ТЕНИ ОЖИВАЮТ!', 'ТЁМНЫЙ ВИХРЬ!', 'АБСОЛЮТНАЯ ТЬМА!'],
-      frostQueen: ['ЛЕДЯНОЙ ЩИТ!', 'МЕТЕЛЬ!', 'АБСОЛЮТНЫЙ НОЛЬ!'],
-      dragonLord: ['ХВОСТ ДРАКОНА!', 'В ПОЛЁТ!', 'ДРАКОНЬЯ ЯРОСТЬ!']
-    };
-    const colors = {
-      butcher: ['#ff2d3f', '#ff0000', '#880000'],
-      necro: ['#7722cc', '#5500aa', '#330066'],
-      golemKing: ['#ffaa00', '#885522', '#553300'],
-      firelord: ['#ff4400', '#ff2200', '#ff6600'],
-      shadowKing: ['#222222', '#440066', '#110022'],
-      frostQueen: ['#4488ff', '#88ccff', '#00ffff'],
-      dragonLord: ['#ff4400', '#ff6600', '#ff0000']
-    };
-    const idx = phase - 2;
-    const name = names[this.type]?.[idx] || 'ЯРОСТЬ!';
-    const color = colors[this.type]?.[idx] || '#ff0000';
+    const bossCfg = BOSS_ABILITIES[this.type];
+    const ann = bossCfg?.announcements?.[phase];
+    const name = ann?.text || 'ЯРОСТЬ!';
+    const color = ann?.color || '#ff0000';
 
     room.sendEvent({ type: 'ann', text: name, color });
     room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 4 + phase, color: parseInt(color.replace('#', '0x')) });
@@ -796,6 +833,14 @@ export class Enemy {
   // МЯСНИК: ближний бой, крюк, комбо-удары, заряд, кровавая ярость
   // ========================================================================
   _butcherAI(dt, room, target, dist, dirX, dirZ, sf, em) {
+    const cfg = BOSS_ABILITIES.butcher;
+    const slamCfg = cfg.abilities.find(a => a.id === 'slam');
+    const chargeCfg = cfg.abilities.find(a => a.id === 'charge');
+    const hookCfg = cfg.abilities.find(a => a.id === 'hook');
+    const cleaveCfg = cfg.abilities.find(a => a.id === 'cleave');
+    const rageCfg = cfg.abilities.find(a => a.id === 'bloodRage');
+    const minionCfg = cfg.abilities.find(a => a.id === 'minionSpawn');
+
     this.bossStateT -= dt;
     this.slamCd -= dt;
     this.chargeCd -= dt;
@@ -808,7 +853,7 @@ export class Enemy {
     if (this.bloodRageT > 0) {
       this.bloodRageT -= dt;
     }
-    const rageDmgMul = this.bloodRageT > 0 ? 1.5 : 1;
+    const rageDmgMul = this.bloodRageT > 0 ? rageCfg.dmgMul : 1;
 
     switch (this.bossState) {
       case 'idle': {
@@ -823,11 +868,11 @@ export class Enemy {
 
         // Priority-based ability selection
         // 1. Hook if player is far (gap closer)
-        if (dist > 8 && this.hookCd <= 0 && this.phase >= 2) {
+        if (dist > 8 && this.hookCd <= 0 && this.phase >= hookCfg.minPhase) {
           this.bossState = 'hookTele';
           this.bossStateT = 0.5;
-          this.hookCd = this.phase >= 4 ? 4 : 8;
-          room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: target.x, z: target.z, r: 1.5, dur: 0.5, color: 0xff4444 });
+          this.hookCd = getAbilityCd(hookCfg, this.phase);
+          room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: target.x, z: target.z, r: hookCfg.teleRadius, dur: hookCfg.teleDur, color: hookCfg.color });
         }
         // 2. Charge if mid-range
         else if (dist > 5 && this.chargeCd <= 0) {
@@ -835,37 +880,38 @@ export class Enemy {
           this.bossStateT = 0.6;
           this.chargeDirX = dirX; this.chargeDirZ = dirZ;
           this.chargeHit = false;
-          this.chargeCd = this.phase >= 4 ? 2.5 : (this.phase >= 3 ? 3.5 : 6);
-          room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: 2, dur: 0.6, color: 0xff4444 });
+          this.chargeCd = getAbilityCd(chargeCfg, this.phase);
+          room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: 2, dur: 0.6, color: chargeCfg.teleColor });
         }
         // 3. Cleave combo if in melee
         else if (dist < 4 && this.cleaveCd <= 0) {
           this.bossState = 'cleaveCombo';
           this.bossStateT = 0.3;
           this.cleaveCombo = 0;
-          this.cleaveCd = this.phase >= 3 ? 2.5 : 4;
+          this.cleaveCd = getAbilityCd(cleaveCfg, this.phase);
         }
         // 4. Slam if in range
         else if (dist < 5 && this.slamCd <= 0) {
           this.bossState = 'slamTele';
           this.bossStateT = 0.6;
-          this.slamWavesLeft = this.phase >= 3 ? 3 : (this.phase >= 2 ? 2 : 1);
-          this.slamCd = this.phase >= 4 ? 1.5 : (this.phase >= 3 ? 2 : 3.5);
-          room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: 4, dur: 0.6, color: 0xff2d3f });
+          this.slamWavesLeft = slamCfg.wavesByPhase[this.phase] || slamCfg.wavesByPhase[1];
+          this.slamCd = getAbilityCd(slamCfg, this.phase);
+          room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: slamCfg.radius, dur: 0.6, color: slamCfg.teleColor });
         }
 
         // Blood rage (phase 3+)
-        if (this.phase >= 3 && this.bloodRageCd <= 0 && this.bloodRageT <= 0) {
-          this.bloodRageT = 5;
-          this.bloodRageCd = 15;
-          room.sendEvent({ type: 'ann', text: 'КРОВАВАЯ ЯРОСТЬ!', color: '#ff0000' });
-          room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 3, color: 0xff0000 });
+        if (this.phase >= rageCfg.minPhase && this.bloodRageCd <= 0 && this.bloodRageT <= 0) {
+          this.bloodRageT = rageCfg.duration;
+          this.bloodRageCd = rageCfg.baseCd;
+          room.sendEvent({ type: 'ann', text: rageCfg.text, color: rageCfg.textColor });
+          room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: rageCfg.novaRadius, color: rageCfg.novaColor });
         }
 
         // Spawn minions
         if (this.minionCd <= 0) {
-          this._spawnMinions(room, this.phase >= 4 ? 4 : (this.phase >= 3 ? 3 : 2));
-          this.minionCd = this.phase >= 4 ? 4 : (this.phase >= 3 ? 6 : 10);
+          const minionCount = minionCfg.countsByPhase[this.phase] || minionCfg.countsByPhase[1];
+          this._spawnMinions(room, minionCount);
+          this.minionCd = getAbilityCd(minionCfg, this.phase);
         }
         break;
       }
@@ -873,11 +919,11 @@ export class Enemy {
         if (this.bossStateT <= 0) {
           // Pull target toward boss
           const pullDist = Math.max(0, dist - 3);
-          target.x -= dirX * pullDist * 0.8;
-          target.z -= dirZ * pullDist * 0.8;
-          target.takeDamage(this.dmg * 0.5 * em, room);
-          room.sendEvent({ type: 'skillfx', kind: 'beam', x: this.x, y: 1.5, z: this.z, x2: target.x, y2: 1.2, z2: target.z, color: 0xff4444 });
-          room.sendEvent({ type: 'skillfx', kind: 'text', text: 'HOOK!', x: target.x, y: 2.5, z: target.z, color: 0xff4444 });
+          target.x -= dirX * pullDist * hookCfg.pullFactor;
+          target.z -= dirZ * pullDist * hookCfg.pullFactor;
+          target.takeDamage(this.dmg * hookCfg.dmgMul * em, room);
+          room.sendEvent({ type: 'skillfx', kind: 'beam', x: this.x, y: 1.5, z: this.z, x2: target.x, y2: 1.2, z2: target.z, color: hookCfg.color });
+          room.sendEvent({ type: 'skillfx', kind: 'text', text: 'HOOK!', x: target.x, y: 2.5, z: target.z, color: hookCfg.color });
           this.bossState = 'idle';
           // Combo into cleave
           this._comboChain = 1;
@@ -888,19 +934,20 @@ export class Enemy {
       case 'cleaveCombo': {
         if (this.bossStateT <= 0) {
           this.cleaveCombo++;
-          const comboDmg = [1.0, 1.2, 1.8][Math.min(this.cleaveCombo - 1, 2)] * rageDmgMul * em;
-          const comboRange = [3.5, 4.0, 5.0][Math.min(this.cleaveCombo - 1, 2)];
+          const comboIdx = Math.min(this.cleaveCombo - 1, cleaveCfg.dmgMuls.length - 1);
+          const comboDmg = cleaveCfg.dmgMuls[comboIdx] * rageDmgMul * em;
+          const comboRange = cleaveCfg.ranges[comboIdx];
           for (const p of room.playersArr()) {
             if (!p.alive) continue;
             if (Math.hypot(p.x - this.x, p.z - this.z) < comboRange) {
               p.takeDamage(this.dmg * comboDmg, room);
             }
           }
-          room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: comboRange, color: 0xff2d3f });
+          room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: comboRange, color: cleaveCfg.color });
 
-          const maxCombo = this.phase >= 4 ? 4 : (this.phase >= 2 ? 3 : 2);
+          const maxCombo = cleaveCfg.maxCombosByPhase[this.phase] || cleaveCfg.maxCombosByPhase[1];
           if (this.cleaveCombo < maxCombo) {
-            this.bossStateT = 0.35;
+            this.bossStateT = cleaveCfg.comboDelay;
           } else {
             this.bossState = 'idle';
           }
@@ -914,14 +961,14 @@ export class Enemy {
           this.bossStateT = 0.12;
           for (const p of room.playersArr()) {
             if (!p.alive) continue;
-            if (Math.hypot(p.x - this.x, p.z - this.z) < 4) {
-              p.takeDamage(this.dmg * 1.4 * em * rageDmgMul, room);
+            if (Math.hypot(p.x - this.x, p.z - this.z) < slamCfg.radius) {
+              p.takeDamage(this.dmg * slamCfg.dmgMul * em * rageDmgMul, room);
               const kdx = p.x - this.x, kdz = p.z - this.z;
               const kd = Math.hypot(kdx, kdz) || 1;
-              p.vx += (kdx / kd) * 8; p.vz += (kdz / kd) * 8;
+              p.vx += (kdx / kd) * slamCfg.knockback; p.vz += (kdz / kd) * slamCfg.knockback;
             }
           }
-          room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 4, color: 0xff2d3f });
+          room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: slamCfg.radius, color: slamCfg.hitColor });
         }
         break;
       }
@@ -930,7 +977,7 @@ export class Enemy {
           if (this.slamWavesLeft > 0) {
             this.bossState = 'slamTele';
             this.bossStateT = 0.4;
-            room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: 4.5, dur: 0.4, color: 0xff0000 });
+            room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: slamCfg.radius + 0.5, dur: 0.4, color: 0xff0000 });
           } else {
             this.bossState = 'idle';
           }
@@ -945,26 +992,26 @@ export class Enemy {
         break;
       }
       case 'charging': {
-        this.x += this.chargeDirX * 28 * em * dt;
-        this.z += this.chargeDirZ * 28 * em * dt;
+        this.x += this.chargeDirX * chargeCfg.speed * em * dt;
+        this.z += this.chargeDirZ * chargeCfg.speed * em * dt;
         for (const p of room.playersArr()) {
           if (!p.alive) continue;
-          if (Math.hypot(p.x - this.x, p.z - this.z) < 2.5 && !this.chargeHit) {
+          if (Math.hypot(p.x - this.x, p.z - this.z) < chargeCfg.hitRadius && !this.chargeHit) {
             this.chargeHit = true;
-            p.takeDamage(this.dmg * 1.3 * em * rageDmgMul, room);
-            p.stunT = 0.8;
-            room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 2.5, color: 0xff4444 });
+            p.takeDamage(this.dmg * chargeCfg.dmgMul * em * rageDmgMul, room);
+            p.stunT = chargeCfg.stunDur;
+            room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: chargeCfg.hitRadius, color: chargeCfg.hitColor });
           }
         }
         if (this.phase >= 3) {
           for (const p of room.playersArr()) {
             if (!p.alive) continue;
-            if (Math.hypot(p.x - this.x, p.z - this.z) < 3) p.takeDamage(this.dmg * 0.4 * em, room);
+            if (Math.hypot(p.x - this.x, p.z - this.z) < chargeCfg.aoeRadius) p.takeDamage(this.dmg * chargeCfg.aoeDmgMul * em, room);
           }
         }
         if (Math.abs(this.x) > ARENA.LIMIT - 2 || Math.abs(this.z) > ARENA.LIMIT - 2) {
-          this.bossState = 'stun'; this.bossStateT = 0.5;
-          room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 3, color: 0xffaa00 });
+          this.bossState = 'stun'; this.bossStateT = chargeCfg.wallStunDur;
+          room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: chargeCfg.hitRadius + 0.5, color: chargeCfg.wallHitColor });
         } else if (this.bossStateT <= 0) {
           this.bossState = 'idle';
         }
@@ -982,6 +1029,16 @@ export class Enemy {
   // НЕКРОМАНТ: дальний бой, спираль, телепорт, ритуал, drain, nova, curse
   // ========================================================================
   _necroAI(dt, room, target, dist, dirX, dirZ, sf, em) {
+    const cfg = BOSS_ABILITIES.necro;
+    const spiralCfg = cfg.abilities.find(a => a.id === 'spiral');
+    const minionCfg = cfg.abilities.find(a => a.id === 'minionSpawn');
+    const boltCfg = cfg.abilities.find(a => a.id === 'shadowBolt');
+    const drainCfg = cfg.abilities.find(a => a.id === 'soulDrain');
+    const novaCfg = cfg.abilities.find(a => a.id === 'deathNova');
+    const curseCfg = cfg.abilities.find(a => a.id === 'curseSpread');
+    const ritualCfg = cfg.abilities.find(a => a.id === 'ritual');
+    const tpCfg = cfg.abilities.find(a => a.id === 'teleport');
+
     this.bossStateT -= dt;
     this.spiralCd -= dt;
     this.minionCd -= dt;
@@ -993,23 +1050,23 @@ export class Enemy {
     this.necroTeleportCd -= dt;
 
     // Phase 3+: dark ritual channeling
-    if (this.phase >= 3 && this.bossState === 'ritual') {
+    if (this.phase >= ritualCfg.minPhase && this.bossState === 'ritual') {
       this.bossStateT -= dt;
       if (this.bossStateT <= 0) {
         this.bossState = 'idle';
         for (const p of room.playersArr()) {
           if (!p.alive) continue;
-          p.takeDamage(this.dmg * 2.0 * em, room);
-          p.enemySlowT = 3; p.enemySlowF = 0.4;
+          p.takeDamage(this.dmg * ritualCfg.dmgMul * em, room);
+          p.enemySlowT = ritualCfg.slowDur; p.enemySlowF = ritualCfg.slowFactor;
         }
-        room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 14, color: 0x5500aa });
-        room.sendEvent({ type: 'ann', text: 'РИТУАЛ ЗАВЕРШЁН!', color: '#5500aa' });
+        room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: ritualCfg.radius, color: ritualCfg.hitColor });
+        room.sendEvent({ type: 'ann', text: ritualCfg.completeText, color: ritualCfg.textColor });
       }
       return;
     }
 
     // Maintain distance 8-14m (adaptive: if kiting, close faster)
-    const preferredDist = this._kitingScore > 0.5 ? 10 : 12;
+    const preferredDist = this._kitingScore > 0.5 ? cfg.preferredDistKiting : cfg.preferredDist;
     if (dist > preferredDist + 2) {
       this.x += dirX * this.speed * sf * em * dt;
       this.z += dirZ * this.speed * sf * em * dt;
@@ -1025,80 +1082,81 @@ export class Enemy {
 
     // Spiral bullets
     if (this.spiralCd <= 0) {
-      const n = this.phase >= 3 ? 16 : (this.phase >= 2 ? 12 : 8);
+      const n = spiralCfg.bulletCountsByPhase[this.phase] || spiralCfg.bulletCountsByPhase[1];
       this._fireSpiral(room, n);
-      this.spiralCd = this.phase >= 4 ? 1.5 : (this.phase >= 2 ? 2.2 : 3);
+      this.spiralCd = getAbilityCd(spiralCfg, this.phase);
     }
 
     // Summon minions
     if (this.minionCd <= 0) {
       const aliveMinions = room.enemies.filter(e => e.isMinion && !e.dying).length;
-      const maxM = this.phase >= 4 ? 10 : (this.phase >= 3 ? 8 : 5);
-      if (aliveMinions < maxM) this._spawnMinions(room, this.phase >= 3 ? 4 : 2);
-      this.minionCd = this.phase >= 4 ? 4 : (this.phase >= 3 ? 5 : 8);
+      const maxM = minionCfg.maxMinionsByPhase[this.phase] || minionCfg.maxMinionsByPhase[1];
+      const spawnCount = minionCfg.countsByPhase[this.phase] || minionCfg.countsByPhase[1];
+      if (aliveMinions < maxM) this._spawnMinions(room, spawnCount);
+      this.minionCd = getAbilityCd(minionCfg, this.phase);
     }
 
     // Shadow bolt (targeted, slow)
-    if (this.phase >= 2 && this.necroShadowBoltCd <= 0 && dist < 20) {
-      this.necroShadowBoltCd = this.phase >= 4 ? 2.5 : 4;
-      room.spawnBullet(this.x, 1.8, this.z, target, this.dmg * 1.3 * em, 0x8800cc);
-      target.enemySlowT = 3; target.enemySlowF = 0.5;
+    if (this.phase >= boltCfg.minPhase && this.necroShadowBoltCd <= 0 && dist < boltCfg.maxRange) {
+      this.necroShadowBoltCd = getAbilityCd(boltCfg, this.phase);
+      room.spawnBullet(this.x, 1.8, this.z, target, this.dmg * boltCfg.dmgMul * em, boltCfg.bulletColor);
+      target.enemySlowT = boltCfg.slowDur; target.enemySlowF = boltCfg.slowFactor;
     }
 
     // Soul drain (phase 2+): channel 2s, heal self, damage target
-    if (this.phase >= 2 && this.necroSoulDrainCd <= 0 && dist < 12) {
-      this.necroSoulDrainCd = this.phase >= 4 ? 5 : 7;
-      const drainDmg = this.dmg * 0.8 * em;
+    if (this.phase >= drainCfg.minPhase && this.necroSoulDrainCd <= 0 && dist < drainCfg.maxRange) {
+      this.necroSoulDrainCd = getAbilityCd(drainCfg, this.phase);
+      const drainDmg = this.dmg * drainCfg.dmgMul * em;
       target.takeDamage(drainDmg, room);
-      this.hp = Math.min(this.maxHp, this.hp + drainDmg * 0.5);
-      room.sendEvent({ type: 'skillfx', kind: 'beam', x: this.x, y: 1.8, z: this.z, x2: target.x, y2: 1.2, z2: target.z, color: 0x44ff44 });
-      room.sendEvent({ type: 'skillfx', kind: 'text', text: 'DRAIN', x: target.x, y: 2.5, z: target.z, color: 0x44ff44 });
+      this.hp = Math.min(this.maxHp, this.hp + drainDmg * drainCfg.healFactor);
+      room.sendEvent({ type: 'skillfx', kind: 'beam', x: this.x, y: 1.8, z: this.z, x2: target.x, y2: 1.2, z2: target.z, color: drainCfg.beamColor });
+      room.sendEvent({ type: 'skillfx', kind: 'text', text: 'DRAIN', x: target.x, y: 2.5, z: target.z, color: drainCfg.beamColor });
     }
 
     // Death nova (phase 3+): AoE around boss
-    if (this.phase >= 3 && this.necroDeathNovaCd <= 0 && dist < 8) {
-      this.necroDeathNovaCd = this.phase >= 4 ? 6 : 10;
+    if (this.phase >= novaCfg.minPhase && this.necroDeathNovaCd <= 0 && dist < novaCfg.maxRange) {
+      this.necroDeathNovaCd = getAbilityCd(novaCfg, this.phase);
       for (const p of room.playersArr()) {
         if (!p.alive) continue;
-        if (Math.hypot(p.x - this.x, p.z - this.z) < 7) {
-          p.takeDamage(this.dmg * 1.2 * em, room);
+        if (Math.hypot(p.x - this.x, p.z - this.z) < novaCfg.radius) {
+          p.takeDamage(this.dmg * novaCfg.dmgMul * em, room);
           const kdx = p.x - this.x, kdz = p.z - this.z;
           const kd = Math.hypot(kdx, kdz) || 1;
-          p.vx += (kdx / kd) * 10; p.vz += (kdz / kd) * 10;
+          p.vx += (kdx / kd) * novaCfg.knockback; p.vz += (kdz / kd) * novaCfg.knockback;
         }
       }
-      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 7, color: 0x7722cc });
+      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: novaCfg.radius, color: novaCfg.color });
     }
 
     // Curse spread (phase 3+): debuff all players
-    if (this.phase >= 3 && this.necroCurseSpreadCd <= 0) {
-      this.necroCurseSpreadCd = this.phase >= 4 ? 6 : 9;
+    if (this.phase >= curseCfg.minPhase && this.necroCurseSpreadCd <= 0) {
+      this.necroCurseSpreadCd = getAbilityCd(curseCfg, this.phase);
       for (const p of room.playersArr()) {
         if (!p.alive) continue;
-        p.enemySlowT = 2; p.enemySlowF = 0.6;
-        p.damageAmpT = 3; p.damageAmpF = 1.25;
+        p.enemySlowT = curseCfg.slowDur; p.enemySlowF = curseCfg.slowFactor;
+        p.damageAmpT = curseCfg.ampDur; p.damageAmpF = curseCfg.ampFactor;
       }
-      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 20, color: 0x5500aa });
-      room.sendEvent({ type: 'ann', text: 'ПРОКЛЯТИЕ РАСПРОСТРАНЯЕТСЯ!', color: '#5500aa' });
+      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: curseCfg.novaRadius, color: curseCfg.novaColor });
+      room.sendEvent({ type: 'ann', text: curseCfg.text, color: curseCfg.textColor });
     }
 
     // Dark ritual (phase 3+)
-    if (this.phase >= 3 && this.necroRitualCd <= 0 && dist < 16) {
+    if (this.phase >= ritualCfg.minPhase && this.necroRitualCd <= 0 && dist < ritualCfg.radius) {
       this.bossState = 'ritual';
-      this.bossStateT = 2.5;
-      this.necroRitualCd = this.phase >= 4 ? 10 : 15;
-      room.sendEvent({ type: 'ann', text: 'РИТУАЛ НАЧИНАЕТСЯ!', color: '#5500aa' });
-      room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: 14, dur: 2.5, color: 0x5500aa });
+      this.bossStateT = ritualCfg.channelDur;
+      this.necroRitualCd = getAbilityCd(ritualCfg, this.phase);
+      room.sendEvent({ type: 'ann', text: ritualCfg.text, color: ritualCfg.textColor });
+      room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: ritualCfg.radius, dur: ritualCfg.channelDur, color: ritualCfg.teleColor });
     }
 
     // Teleport when player gets too close
-    if (dist < 5 && this.bossState !== 'ritual' && this.necroTeleportCd <= 0) {
-      this.necroTeleportCd = this.phase >= 4 ? 2 : (this.phase >= 3 ? 3 : 5);
+    if (dist < tpCfg.triggerRange && this.bossState !== 'ritual' && this.necroTeleportCd <= 0) {
+      this.necroTeleportCd = getAbilityCd(tpCfg, this.phase);
       const a = Math.random() * Math.PI * 2;
-      const d = 11 + Math.random() * 4;
+      const d = tpCfg.teleportDist + Math.random() * tpCfg.teleportRandom;
       this.x = clamp(target.x + Math.cos(a) * d, -ARENA.LIMIT + 2, ARENA.LIMIT - 2);
       this.z = clamp(target.z + Math.sin(a) * d, -ARENA.LIMIT + 2, ARENA.LIMIT - 2);
-      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 2, color: 0x7722cc });
+      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 2, color: tpCfg.color });
     }
 
     this.y = Math.sin(room.time * 2 + this.seed) * 0.1;
@@ -1108,6 +1166,16 @@ export class Enemy {
   // КОРОЛЬ ГОЛЕМОВ: щит, удары, charge, earthquake, boulder, seismic, fortify
   // ========================================================================
   _golemKingAI(dt, room, target, dist, dirX, dirZ, sf, em) {
+    const cfg = BOSS_ABILITIES.golemKing;
+    const slamCfg = cfg.abilities.find(a => a.id === 'slam');
+    const chargeCfg = cfg.abilities.find(a => a.id === 'charge');
+    const boulderCfg = cfg.abilities.find(a => a.id === 'boulder');
+    const seismicCfg = cfg.abilities.find(a => a.id === 'seismic');
+    const fortifyCfg = cfg.abilities.find(a => a.id === 'fortify');
+    const earthquakeCfg = cfg.abilities.find(a => a.id === 'earthquake');
+    const eruptionCfg = cfg.abilities.find(a => a.id === 'eruption');
+    const minionCfg = cfg.abilities.find(a => a.id === 'minionSpawn');
+
     this.gkSlamCd -= dt;
     this.gkChargeCd -= dt;
     this.gkEarthquakeCd -= dt;
@@ -1139,14 +1207,14 @@ export class Enemy {
     }
     if (this.bossState === 'gkCharging') {
       this.bossStateT -= dt;
-      this.x += this.gkChargeDirX * 24 * em * dt;
-      this.z += this.gkChargeDirZ * 24 * em * dt;
+      this.x += this.gkChargeDirX * chargeCfg.speed * em * dt;
+      this.z += this.gkChargeDirZ * chargeCfg.speed * em * dt;
       for (const p of room.playersArr()) {
         if (!p.alive) continue;
-        if (Math.hypot(p.x - this.x, p.z - this.z) < 2.5 && !this.gkChargeHit) {
+        if (Math.hypot(p.x - this.x, p.z - this.z) < chargeCfg.hitRadius && !this.gkChargeHit) {
           this.gkChargeHit = true;
-          p.takeDamage(this.dmg * 1.5 * em, room);
-          p.stunT = 1.0;
+          p.takeDamage(this.dmg * chargeCfg.dmgMul * em, room);
+          p.stunT = chargeCfg.stunDur;
         }
       }
       if (Math.abs(this.x) > ARENA.LIMIT - 2 || Math.abs(this.z) > ARENA.LIMIT - 2 || this.bossStateT <= 0) {
@@ -1155,11 +1223,11 @@ export class Enemy {
         if (this.phase >= 3) {
           for (const p of room.playersArr()) {
             if (!p.alive) continue;
-            if (Math.hypot(p.x - this.x, p.z - this.z) < 6) {
-              p.takeDamage(this.dmg * 0.8 * em, room);
+            if (Math.hypot(p.x - this.x, p.z - this.z) < chargeCfg.seismicWallRadius) {
+              p.takeDamage(this.dmg * chargeCfg.seismicWallDmgMul * em, room);
             }
           }
-          room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 6, color: 0x885522 });
+          room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: chargeCfg.seismicWallRadius, color: 0x885522 });
         }
       }
       return;
@@ -1170,17 +1238,18 @@ export class Enemy {
       this.bossStateT -= dt;
       if (this.bossStateT <= 0) {
         this.bossState = 'idle';
-        const slamDmg = this.dmg * (this.phase >= 4 ? 1.8 : (this.phase >= 3 ? 1.5 : 1.2)) * em;
+        const slamDmgMul = slamCfg.dmgMulsByPhase[this.phase] || slamCfg.dmgMulsByPhase[1];
+        const slamDmg = this.dmg * slamDmgMul * em;
         for (const p of room.playersArr()) {
           if (!p.alive) continue;
-          if (Math.hypot(p.x - this.x, p.z - this.z) < 5) {
+          if (Math.hypot(p.x - this.x, p.z - this.z) < slamCfg.radius) {
             p.takeDamage(slamDmg, room);
             const kdx = p.x - this.x, kdz = p.z - this.z;
             const kd = Math.hypot(kdx, kdz) || 1;
-            p.vx += (kdx / kd) * 10; p.vz += (kdz / kd) * 10;
+            p.vx += (kdx / kd) * slamCfg.knockback; p.vz += (kdz / kd) * slamCfg.knockback;
           }
         }
-        room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 5, color: 0x555555 });
+        room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: slamCfg.radius, color: slamCfg.hitColor });
       }
       return;
     }
@@ -1193,84 +1262,85 @@ export class Enemy {
     }
 
     // Boulder throw (phase 2+, ranged attack)
-    if (this.phase >= 2 && this.gkBoulderCd <= 0 && dist > 8) {
-      this.gkBoulderCd = this.phase >= 4 ? 3 : 6;
-      room.spawnBullet(this.x, 2.5, this.z, target, this.dmg * 1.2 * em, 0x888888);
-      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 1.5, color: 0x888888 });
+    if (this.phase >= boulderCfg.minPhase && this.gkBoulderCd <= 0 && dist > boulderCfg.minRange) {
+      this.gkBoulderCd = getAbilityCd(boulderCfg, this.phase);
+      room.spawnBullet(this.x, boulderCfg.bulletY, this.z, target, this.dmg * boulderCfg.dmgMul * em, boulderCfg.bulletColor);
+      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 1.5, color: boulderCfg.bulletColor });
     }
 
     // Charge (phase 2+)
-    if (this.phase >= 2 && this.gkChargeCd <= 0 && dist > 5 && dist < 20) {
+    if (this.phase >= chargeCfg.minPhase && this.gkChargeCd <= 0 && dist > 5 && dist < 20) {
       this.bossState = 'gkChargeTele';
-      this.bossStateT = 0.7;
+      this.bossStateT = chargeCfg.teleDur;
       this.gkChargeDirX = dirX; this.gkChargeDirZ = dirZ;
       this.gkChargeHit = false;
-      this.gkChargeCd = this.phase >= 4 ? 3 : 5;
-      room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: 2.5, dur: 0.7, color: 0xffaa00 });
+      this.gkChargeCd = getAbilityCd(chargeCfg, this.phase);
+      room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: chargeCfg.hitRadius, dur: chargeCfg.teleDur, color: chargeCfg.teleColor });
     }
 
     // Ground Slam
-    if (dist < 5 && this.gkSlamCd <= 0) {
+    if (dist < slamCfg.radius && this.gkSlamCd <= 0) {
       this.bossState = 'gkSlamTele';
       this.bossStateT = 0.7;
-      this.gkSlamCd = this.phase >= 4 ? 1.5 : (this.phase >= 2 ? 2.5 : 3.5);
-      room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: 5, dur: 0.7, color: 0x555555 });
+      this.gkSlamCd = getAbilityCd(slamCfg, this.phase);
+      room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: slamCfg.radius, dur: 0.7, color: slamCfg.teleColor });
     }
 
     // Seismic waves (phase 3+): line of damage toward target
-    if (this.phase >= 3 && this.gkSeismicCd <= 0 && dist < 15) {
-      this.gkSeismicCd = this.phase >= 4 ? 5 : 8;
-      for (let i = 1; i <= 5; i++) {
-        const sx = this.x + dirX * i * 3;
-        const sz = this.z + dirZ * i * 3;
-        room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: sx, z: sz, r: 2, dur: 0.3 + i * 0.15, color: 0x885522 });
+    if (this.phase >= seismicCfg.minPhase && this.gkSeismicCd <= 0 && dist < 15) {
+      this.gkSeismicCd = getAbilityCd(seismicCfg, this.phase);
+      for (let i = 1; i <= seismicCfg.waveCount; i++) {
+        const sx = this.x + dirX * i * seismicCfg.waveSpacing;
+        const sz = this.z + dirZ * i * seismicCfg.waveSpacing;
+        room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: sx, z: sz, r: seismicCfg.waveRadius, dur: 0.3 + i * 0.15, color: seismicCfg.color });
         setTimeout(() => {
           for (const p of room.playersArr()) {
             if (!p.alive) continue;
-            if (Math.hypot(p.x - sx, p.z - sz) < 2) p.takeDamage(this.dmg * 0.7 * em, room);
+            if (Math.hypot(p.x - sx, p.z - sz) < seismicCfg.waveRadius) p.takeDamage(this.dmg * seismicCfg.dmgMul * em, room);
           }
-          room.sendEvent({ type: 'skillfx', kind: 'nova', x: sx, z: sz, radius: 2, color: 0x885522 });
+          room.sendEvent({ type: 'skillfx', kind: 'nova', x: sx, z: sz, radius: seismicCfg.waveRadius, color: seismicCfg.color });
         }, (300 + i * 150));
       }
     }
 
     // Fortify (phase 3+): temporary damage reduction
-    if (this.phase >= 3 && this.gkFortifyCd <= 0 && this.hp / this.maxHp < 0.5) {
-      this.gkFortifyCd = 20;
-      this.gkFortifyT = 4;
-      room.sendEvent({ type: 'ann', text: 'КАМЕННАЯ КОЖА!', color: '#888888' });
-      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 2, color: 0x888888 });
+    if (this.phase >= fortifyCfg.minPhase && this.gkFortifyCd <= 0 && this.hp / this.maxHp < fortifyCfg.hpThreshold) {
+      this.gkFortifyCd = fortifyCfg.baseCd;
+      this.gkFortifyT = fortifyCfg.duration;
+      room.sendEvent({ type: 'ann', text: fortifyCfg.text, color: fortifyCfg.textColor });
+      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 2, color: fortifyCfg.color });
     }
 
     // Earthquake (phase 3+)
-    if (this.phase >= 3 && this.gkEarthquakeCd <= 0) {
-      this.gkEarthquakeCd = this.phase >= 4 ? 5 : 7;
+    if (this.phase >= earthquakeCfg.minPhase && this.gkEarthquakeCd <= 0) {
+      this.gkEarthquakeCd = getAbilityCd(earthquakeCfg, this.phase);
       for (const p of room.playersArr()) {
         if (!p.alive) continue;
-        if (Math.hypot(p.x - this.x, p.z - this.z) < 6) {
-          p.takeDamage(this.dmg * 1.3 * em, room);
+        if (Math.hypot(p.x - this.x, p.z - this.z) < earthquakeCfg.radius) {
+          p.takeDamage(this.dmg * earthquakeCfg.dmgMul * em, room);
           const kdx = p.x - this.x, kdz = p.z - this.z;
           const kd = Math.hypot(kdx, kdz) || 1;
-          p.vx = (kdx / kd) * 14; p.vz = (kdz / kd) * 14;
+          p.vx = (kdx / kd) * earthquakeCfg.knockback; p.vz = (kdz / kd) * earthquakeCfg.knockback;
         }
       }
-      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 6, color: 0x885522 });
-      this._spawnMinions(room, this.phase >= 4 ? 4 : 3);
+      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: earthquakeCfg.radius, color: earthquakeCfg.color });
+      const eqMinionCount = earthquakeCfg.spawnMinionsByPhase[this.phase] || earthquakeCfg.spawnMinionsByPhase[1];
+      this._spawnMinions(room, eqMinionCount);
     }
 
     // Eruption (phase 4): multiple random AoEs
-    if (this.phase >= 4 && this.gkEruptionCd <= 0) {
-      this.gkEruptionCd = 8;
-      for (let i = 0; i < 4; i++) {
-        const ex = target.x + (Math.random() - 0.5) * 10;
-        const ez = target.z + (Math.random() - 0.5) * 10;
-        room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: ex, z: ez, r: 2.5, dur: 1.0, color: 0xff4400 });
+    if (this.phase >= eruptionCfg.minPhase && this.gkEruptionCd <= 0) {
+      this.gkEruptionCd = eruptionCfg.baseCd;
+      for (let i = 0; i < eruptionCfg.count; i++) {
+        const ex = target.x + (Math.random() - 0.5) * eruptionCfg.spread;
+        const ez = target.z + (Math.random() - 0.5) * eruptionCfg.spread;
+        room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: ex, z: ez, r: eruptionCfg.radius, dur: eruptionCfg.teleDur, color: eruptionCfg.teleColor });
         setTimeout(() => {
           for (const p of room.playersArr()) {
             if (!p.alive) continue;
-            if (Math.hypot(p.x - ex, p.z - ez) < 2.5) p.takeDamage(this.dmg * 1.0 * em, room);
+            if (Math.hypot(p.x - ex, p.z - ez) < eruptionCfg.radius) p.takeDamage(this.dmg * eruptionCfg.dmgMul * em, room);
           }
-          room.sendEvent({ type: 'skillfx', kind: 'nova', x: ex, z: ez, radius: 2.5, color: 0xff4400 });
+          room.sendEvent({ type: 'skillfx', kind: 'nova', x: ex, z: ez, radius: eruptionCfg.radius, color: eruptionCfg.hitColor });
         }, 1000);
       }
     }
@@ -1282,6 +1352,16 @@ export class Enemy {
   // ПОВЕЛИТЕЛЬ ОГНЯ: fireballs, wave, meteor, aura, inferno, pillars, phoenix
   // ========================================================================
   _firelordAI(dt, room, target, dist, dirX, dirZ, sf, em) {
+    const cfg = BOSS_ABILITIES.firelord;
+    const fbCfg = cfg.abilities.find(a => a.id === 'fireball');
+    const waveCfg = cfg.abilities.find(a => a.id === 'fireWave');
+    const pillarCfg = cfg.abilities.find(a => a.id === 'firePillars');
+    const meteorCfg = cfg.abilities.find(a => a.id === 'meteorRain');
+    const auraCfg = cfg.abilities.find(a => a.id === 'fireAura');
+    const heatCfg = cfg.abilities.find(a => a.id === 'heatWave');
+    const phoenixCfg = cfg.abilities.find(a => a.id === 'phoenix');
+    const minionCfg = cfg.abilities.find(a => a.id === 'minionSpawn');
+
     this.flFireballCd -= dt;
     this.flFireWaveCd -= dt;
     this.flMeteorCd -= dt;
@@ -1289,38 +1369,37 @@ export class Enemy {
     this.flPillarCd -= dt;
     this.flHeatWaveCd -= dt;
 
-    // Phoenix rebirth (once, at 15% HP)
-    if (this.phase >= 4 && !this.flPhoenixUsed && this.hp / this.maxHp < 0.15) {
+    // Phoenix rebirth (once, at threshold HP)
+    if (this.phase >= phoenixCfg.minPhase && !this.flPhoenixUsed && this.hp / this.maxHp < phoenixCfg.triggerHpPct) {
       this.flPhoenixUsed = true;
-      this.hp = Math.round(this.maxHp * 0.25);
-      room.sendEvent({ type: 'ann', text: 'ФЕНИКС ВОЗРОЖДАЕТСЯ!', color: '#ff6600' });
-      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 8, color: 0xff6600 });
-      // Damage all nearby
+      this.hp = Math.round(this.maxHp * phoenixCfg.reviveHpPct);
+      room.sendEvent({ type: 'ann', text: phoenixCfg.text, color: phoenixCfg.textColor });
+      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: phoenixCfg.reviveRadius, color: phoenixCfg.reviveColor });
       for (const p of room.playersArr()) {
         if (!p.alive) continue;
-        if (Math.hypot(p.x - this.x, p.z - this.z) < 8) {
-          p.takeDamage(this.dmg * 1.5 * em, room);
-          p.enemyBurnT = 4; p.enemyBurnDps = 10;
+        if (Math.hypot(p.x - this.x, p.z - this.z) < phoenixCfg.reviveRadius) {
+          p.takeDamage(this.dmg * phoenixCfg.reviveDmgMul * em, room);
+          p.enemyBurnT = phoenixCfg.reviveBurnDur; p.enemyBurnDps = phoenixCfg.reviveBurnDps;
         }
       }
     }
 
     // Fire aura (phase 3+)
-    if (this.phase >= 3) {
+    if (this.phase >= auraCfg.minPhase) {
       this.flFireAuraTick -= dt;
       if (this.flFireAuraTick <= 0) {
-        this.flFireAuraTick = 0.5;
+        this.flFireAuraTick = auraCfg.tickInterval;
         for (const p of room.playersArr()) {
           if (!p.alive) continue;
-          if (Math.hypot(p.x - this.x, p.z - this.z) < 3.5) {
-            p.takeDamage(this.dmg * 0.12 * em, room);
+          if (Math.hypot(p.x - this.x, p.z - this.z) < auraCfg.radius) {
+            p.takeDamage(this.dmg * auraCfg.dmgMul * em, room);
           }
         }
       }
     }
 
     // Maintain distance (adaptive)
-    const prefDist = this._kitingScore > 0.5 ? 8 : 10;
+    const prefDist = this._kitingScore > 0.5 ? cfg.preferredDistKiting : cfg.preferredDist;
     if (dist > prefDist + 3) {
       this.x += dirX * this.speed * sf * em * dt;
       this.z += dirZ * this.speed * sf * em * dt;
@@ -1335,84 +1414,84 @@ export class Enemy {
     this.x += sx * dt; this.z += sz * dt;
 
     // Fireballs
-    if (this.flFireballCd <= 0 && dist < 22) {
-      this.flFireballCd = this.phase >= 4 ? 1.5 : 2.5;
-      const count = this.phase >= 3 ? 5 : 3;
+    if (this.flFireballCd <= 0 && dist < fbCfg.maxRange) {
+      this.flFireballCd = getAbilityCd(fbCfg, this.phase);
+      const count = fbCfg.countByPhase[this.phase] || fbCfg.countByPhase[1];
       for (let i = 0; i < count; i++) {
-        room.spawnBullet(this.x, 1.5, this.z, target, this.dmg * 0.8 * em, 0xff4400);
+        room.spawnBullet(this.x, fbCfg.bulletY, this.z, target, this.dmg * fbCfg.dmgMul * em, fbCfg.bulletColor);
       }
     }
 
     // Fire wave (phase 2+)
-    if (this.phase >= 2 && this.flFireWaveCd <= 0 && dist < 12) {
-      this.flFireWaveCd = this.phase >= 4 ? 3 : 5;
+    if (this.phase >= waveCfg.minPhase && this.flFireWaveCd <= 0 && dist < 12) {
+      this.flFireWaveCd = getAbilityCd(waveCfg, this.phase);
       const baseAngle = Math.atan2(dirX, dirZ);
-      const coneHalf = (120 * Math.PI / 180) / 2;
+      const coneHalf = (waveCfg.coneAngle * Math.PI / 180) / 2;
       for (const p of room.playersArr()) {
         if (!p.alive) continue;
         const pd = Math.hypot(p.x - this.x, p.z - this.z);
-        if (pd > 8) continue;
+        if (pd > waveCfg.maxRange) continue;
         const pAngle = Math.atan2(p.x - this.x, p.z - this.z);
         let diff = pAngle - baseAngle;
         while (diff > Math.PI) diff -= Math.PI * 2;
         while (diff < -Math.PI) diff += Math.PI * 2;
         if (Math.abs(diff) < coneHalf) {
-          p.takeDamage(this.dmg * 1.2 * em, room);
-          p.enemyBurnT = 3; p.enemyBurnDps = 8;
+          p.takeDamage(this.dmg * waveCfg.dmgMul * em, room);
+          p.enemyBurnT = waveCfg.burnDur; p.enemyBurnDps = waveCfg.burnDps;
         }
       }
-      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 8, color: 0xff6600 });
+      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: waveCfg.maxRange, color: 0xff6600 });
     }
 
     // Fire pillars (phase 2+): telegraphed line of fire
-    if (this.phase >= 2 && this.flPillarCd <= 0 && dist < 16) {
-      this.flPillarCd = this.phase >= 4 ? 4 : 7;
-      for (let i = 0; i < 3; i++) {
-        const px = target.x + (Math.random() - 0.5) * 6;
-        const pz = target.z + (Math.random() - 0.5) * 6;
-        room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: px, z: pz, r: 1.5, dur: 1.0, color: 0xff4400 });
+    if (this.phase >= pillarCfg.minPhase && this.flPillarCd <= 0 && dist < 16) {
+      this.flPillarCd = getAbilityCd(pillarCfg, this.phase);
+      for (let i = 0; i < pillarCfg.count; i++) {
+        const px = target.x + (Math.random() - 0.5) * pillarCfg.spread;
+        const pz = target.z + (Math.random() - 0.5) * pillarCfg.spread;
+        room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: px, z: pz, r: pillarCfg.radius, dur: pillarCfg.teleDur, color: pillarCfg.teleColor });
         setTimeout(() => {
           for (const p of room.playersArr()) {
             if (!p.alive) continue;
-            if (Math.hypot(p.x - px, p.z - pz) < 1.5) {
-              p.takeDamage(this.dmg * 1.0 * em, room);
-              p.enemyBurnT = 2; p.enemyBurnDps = 6;
+            if (Math.hypot(p.x - px, p.z - pz) < pillarCfg.radius) {
+              p.takeDamage(this.dmg * pillarCfg.dmgMul * em, room);
+              p.enemyBurnT = pillarCfg.burnDur; p.enemyBurnDps = pillarCfg.burnDps;
             }
           }
-          room.sendEvent({ type: 'skillfx', kind: 'nova', x: px, z: pz, radius: 1.5, color: 0xff4400 });
+          room.sendEvent({ type: 'skillfx', kind: 'nova', x: px, z: pz, radius: pillarCfg.radius, color: pillarCfg.hitColor });
         }, 1000);
       }
     }
 
     // Meteor rain (phase 3+)
-    if (this.phase >= 3 && this.flMeteorCd <= 0) {
-      this.flMeteorCd = this.phase >= 4 ? 5 : 7;
-      const count = this.phase >= 4 ? 7 : 5;
+    if (this.phase >= meteorCfg.minPhase && this.flMeteorCd <= 0) {
+      this.flMeteorCd = getAbilityCd(meteorCfg, this.phase);
+      const count = meteorCfg.countByPhase[this.phase] || meteorCfg.countByPhase[1];
       for (let i = 0; i < count; i++) {
-        const mx = target.x + (Math.random() - 0.5) * 10;
-        const mz = target.z + (Math.random() - 0.5) * 10;
-        room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: mx, z: mz, r: 2, dur: 1.2, color: 0xff2200 });
+        const mx = target.x + (Math.random() - 0.5) * meteorCfg.spread;
+        const mz = target.z + (Math.random() - 0.5) * meteorCfg.spread;
+        room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: mx, z: mz, r: meteorCfg.radius, dur: meteorCfg.teleDur, color: meteorCfg.teleColor });
         setTimeout(() => {
           for (const p of room.playersArr()) {
             if (!p.alive) continue;
-            if (Math.hypot(p.x - mx, p.z - mz) < 2) p.takeDamage(this.dmg * 1.5 * em, room);
+            if (Math.hypot(p.x - mx, p.z - mz) < meteorCfg.radius) p.takeDamage(this.dmg * meteorCfg.dmgMul * em, room);
           }
-          room.sendEvent({ type: 'skillfx', kind: 'nova', x: mx, z: mz, radius: 2, color: 0xff2200 });
+          room.sendEvent({ type: 'skillfx', kind: 'nova', x: mx, z: mz, radius: meteorCfg.radius, color: meteorCfg.hitColor });
         }, 1200);
       }
-      room.sendEvent({ type: 'ann', text: 'МЕТЕОРЫ!', color: '#ff4400' });
+      room.sendEvent({ type: 'ann', text: meteorCfg.text, color: meteorCfg.textColor });
     }
 
     // Heat wave (phase 4): full-screen slow + burn
-    if (this.phase >= 4 && this.flHeatWaveCd <= 0) {
-      this.flHeatWaveCd = 12;
+    if (this.phase >= heatCfg.minPhase && this.flHeatWaveCd <= 0) {
+      this.flHeatWaveCd = heatCfg.baseCd;
       for (const p of room.playersArr()) {
         if (!p.alive) continue;
-        p.enemySlowT = 3; p.enemySlowF = 0.6;
-        p.enemyBurnT = 4; p.enemyBurnDps = 5;
+        p.enemySlowT = heatCfg.slowDur; p.enemySlowF = heatCfg.slowFactor;
+        p.enemyBurnT = heatCfg.burnDur; p.enemyBurnDps = heatCfg.burnDps;
       }
-      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 30, color: 0xff6600 });
-      room.sendEvent({ type: 'ann', text: 'ВОЛНА ЖАРА!', color: '#ff6600' });
+      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: heatCfg.novaRadius, color: heatCfg.novaColor });
+      room.sendEvent({ type: 'ann', text: heatCfg.text, color: heatCfg.textColor });
     }
 
     this.y = Math.sin(room.time * 2) * 0.08;
@@ -1422,6 +1501,15 @@ export class Enemy {
   // КОРОЛЬ ТЕНЕЙ: teleport, backstab, clones, vortex, shadow step, darkness
   // ========================================================================
   _shadowKingAI(dt, room, target, dist, dirX, dirZ, sf, em) {
+    const cfg = BOSS_ABILITIES.shadowKing;
+    const bsCfg = cfg.abilities.find(a => a.id === 'backstab');
+    const cloneCfg = cfg.abilities.find(a => a.id === 'clone');
+    const vortexCfg = cfg.abilities.find(a => a.id === 'vortex');
+    const darkCfg = cfg.abilities.find(a => a.id === 'darkness');
+    const ripCfg = cfg.abilities.find(a => a.id === 'soulRip');
+    const stepCfg = cfg.abilities.find(a => a.id === 'shadowStep');
+    const minionCfg = cfg.abilities.find(a => a.id === 'minionSpawn');
+
     this.skTeleportCd -= dt;
     this.skBackstabCd -= dt;
     this.skCloneCd -= dt;
@@ -1432,85 +1520,84 @@ export class Enemy {
     this.skMirrorCd -= dt;
 
     // Shadow vortex (phase 3+)
-    if (this.phase >= 3 && this.skVortexCd <= 0 && dist < 16) {
-      this.skVortexCd = this.phase >= 4 ? 4 : 6;
+    if (this.phase >= vortexCfg.minPhase && this.skVortexCd <= 0 && dist < 16) {
+      this.skVortexCd = getAbilityCd(vortexCfg, this.phase);
       for (const p of room.playersArr()) {
         if (!p.alive) continue;
         const pd = Math.hypot(p.x - this.x, p.z - this.z);
-        if (pd < 10) {
-          const pullStr = Math.max(0, 8 - pd) * 1.5;
+        if (pd < vortexCfg.pullRadius) {
+          const pullStr = Math.max(0, vortexCfg.pullStrengthBase - pd) * vortexCfg.pullStrengthMul;
           const pullX = (this.x - p.x) / (pd || 1);
           const pullZ = (this.z - p.z) / (pd || 1);
           p.vx += pullX * pullStr; p.vz += pullZ * pullStr;
-          p.takeDamage(this.dmg * 1.0 * em, room);
+          p.takeDamage(this.dmg * vortexCfg.dmgMul * em, room);
         }
       }
-      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 10, color: 0x440066 });
-      room.sendEvent({ type: 'ann', text: 'ТЁМНЫЙ ВИХРЬ!', color: '#440066' });
+      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: vortexCfg.novaRadius, color: vortexCfg.novaColor });
+      room.sendEvent({ type: 'ann', text: vortexCfg.text, color: vortexCfg.textColor });
     }
 
     // Darkness zone (phase 3+): AoE that blinds (slows + damage over time)
-    if (this.phase >= 3 && this.skDarknessCd <= 0) {
-      this.skDarknessCd = this.phase >= 4 ? 7 : 10;
+    if (this.phase >= darkCfg.minPhase && this.skDarknessCd <= 0) {
+      this.skDarknessCd = getAbilityCd(darkCfg, this.phase);
       const dzx = target.x, dzz = target.z;
-      room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: dzx, z: dzz, r: 6, dur: 1.0, color: 0x110022 });
+      room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: dzx, z: dzz, r: darkCfg.radius, dur: darkCfg.teleDur, color: darkCfg.teleColor });
       setTimeout(() => {
         for (const p of room.playersArr()) {
           if (!p.alive) continue;
-          if (Math.hypot(p.x - dzx, p.z - dzz) < 6) {
-            p.takeDamage(this.dmg * 1.2 * em, room);
-            p.enemySlowT = 3; p.enemySlowF = 0.4;
+          if (Math.hypot(p.x - dzx, p.z - dzz) < darkCfg.radius) {
+            p.takeDamage(this.dmg * darkCfg.dmgMul * em, room);
+            p.enemySlowT = darkCfg.slowDur; p.enemySlowF = darkCfg.slowFactor;
           }
         }
-        room.sendEvent({ type: 'skillfx', kind: 'nova', x: dzx, z: dzz, radius: 6, color: 0x220044 });
+        room.sendEvent({ type: 'skillfx', kind: 'nova', x: dzx, z: dzz, radius: darkCfg.radius, color: darkCfg.hitColor });
       }, 1000);
     }
 
     // Shadow clones (phase 2+)
-    if (this.phase >= 2 && this.skCloneCd <= 0) {
-      this.skCloneCd = this.phase >= 4 ? 5 : 8;
-      const cloneCount = this.phase >= 4 ? 3 : 2;
+    if (this.phase >= cloneCfg.minPhase && this.skCloneCd <= 0) {
+      this.skCloneCd = getAbilityCd(cloneCfg, this.phase);
+      const cloneCount = cloneCfg.countByPhase[this.phase] || cloneCfg.countByPhase[1];
       for (let i = 0; i < cloneCount; i++) {
         const a = Math.random() * Math.PI * 2;
-        const cx = clamp(this.x + Math.cos(a) * 3, -ARENA.LIMIT + 2, ARENA.LIMIT - 2);
-        const cz = clamp(this.z + Math.sin(a) * 3, -ARENA.LIMIT + 2, ARENA.LIMIT - 2);
-        const clone = new Enemy('phantom', cx, cz, 1, false);
+        const cx = clamp(this.x + Math.cos(a) * cloneCfg.spawnRadius, -ARENA.LIMIT + 2, ARENA.LIMIT - 2);
+        const cz = clamp(this.z + Math.sin(a) * cloneCfg.spawnRadius, -ARENA.LIMIT + 2, ARENA.LIMIT - 2);
+        const clone = new Enemy(cloneCfg.cloneType, cx, cz, 1, false);
         clone.isMinion = true;
-        clone.maxHp = Math.round(clone.maxHp * 0.4);
+        clone.maxHp = Math.round(clone.maxHp * cloneCfg.cloneHpMul);
         clone.hp = clone.maxHp;
-        clone.dmg = this.dmg * 0.6;
-        clone.size *= 0.7;
-        clone.score = 25;
-        clone.xp = 6;
+        clone.dmg = this.dmg * cloneCfg.cloneDmgMul;
+        clone.size *= cloneCfg.cloneSizeMul;
+        clone.score = cloneCfg.cloneScore;
+        clone.xp = cloneCfg.cloneXp;
         room.enemies.push(clone);
       }
-      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 2.5, color: 0x222222 });
+      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 2.5, color: cloneCfg.novaColor });
     }
 
     // Soul rip (phase 2+): targeted high damage + heal
-    if (this.phase >= 2 && this.skSoulRipCd <= 0 && dist < 4) {
-      this.skSoulRipCd = this.phase >= 4 ? 5 : 8;
-      target.takeDamage(this.dmg * 1.6 * em, room);
-      this.hp = Math.min(this.maxHp, this.hp + this.dmg * 0.8);
-      room.sendEvent({ type: 'skillfx', kind: 'beam', x: this.x, y: 1.5, z: this.z, x2: target.x, y2: 1.2, z2: target.z, color: 0xaa00ff });
-      room.sendEvent({ type: 'skillfx', kind: 'text', text: 'SOUL RIP!', x: target.x, y: 2.5, z: target.z, color: 0xaa00ff });
+    if (this.phase >= ripCfg.minPhase && this.skSoulRipCd <= 0 && dist < ripCfg.maxRange) {
+      this.skSoulRipCd = getAbilityCd(ripCfg, this.phase);
+      target.takeDamage(this.dmg * ripCfg.dmgMul * em, room);
+      this.hp = Math.min(this.maxHp, this.hp + this.dmg * ripCfg.healFactor);
+      room.sendEvent({ type: 'skillfx', kind: 'beam', x: this.x, y: 1.5, z: this.z, x2: target.x, y2: 1.2, z2: target.z, color: ripCfg.beamColor });
+      room.sendEvent({ type: 'skillfx', kind: 'text', text: ripCfg.text, x: target.x, y: 2.5, z: target.z, color: ripCfg.textColor });
     }
 
     // Teleport + backstab (adaptive: more frequent when kiting)
-    const tpCd = this.phase >= 4 ? 1.5 : (this.phase >= 3 ? 2 : (this._kitingScore > 0.5 ? 2.5 : 4));
+    const tpCd = getAbilityCd(stepCfg, this.phase);
     if (this.skTeleportCd <= 0 && (dist < 6 || this._kitingScore > 0.7)) {
       const angle = Math.atan2(target.x - this.x, target.z - this.z);
-      const tpDist = 2.0;
-      this.x = target.x + Math.sin(angle) * tpDist;
-      this.z = target.z + Math.cos(angle) * tpDist;
+      this.x = target.x + Math.sin(angle) * stepCfg.teleportDist;
+      this.z = target.z + Math.cos(angle) * stepCfg.teleportDist;
       this.x = clamp(this.x, -ARENA.LIMIT + 2, ARENA.LIMIT - 2);
       this.z = clamp(this.z, -ARENA.LIMIT + 2, ARENA.LIMIT - 2);
       this.skTeleportCd = tpCd;
-      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 2, color: 0x333333 });
+      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 2, color: stepCfg.novaColor });
       const newDist = Math.hypot(target.x - this.x, target.z - this.z);
-      if (newDist < 3.5) {
-        target.takeDamage(this.dmg * 1.8 * em, room);
-        room.sendEvent({ type: 'skillfx', kind: 'text', text: 'BACKSTAB!', x: target.x, y: 2.5, z: target.z, color: 0xff0000 });
+      if (newDist < stepCfg.backstabRange) {
+        target.takeDamage(this.dmg * stepCfg.backstabDmgMul * em, room);
+        room.sendEvent({ type: 'skillfx', kind: 'text', text: stepCfg.backstabText, x: target.x, y: 2.5, z: target.z, color: stepCfg.backstabTextColor });
       }
     } else if (dist > this.radius + 1.2) {
       // Chase with strafe
@@ -1520,7 +1607,7 @@ export class Enemy {
     } else {
       this.attackCd -= dt;
       if (this.attackCd <= 0) {
-        this.attackCd = 0.7;
+        this.attackCd = bsCfg.attackCd;
         target.takeDamage(this.dmg * em, room);
       }
     }
@@ -1532,6 +1619,16 @@ export class Enemy {
   // ЛЕДЯНАЯ КОРОЛЕВА: ice shards, freeze, blizzard, lance, frozen ground, absolute zero
   // ========================================================================
   _frostQueenAI(dt, room, target, dist, dirX, dirZ, sf, em) {
+    const cfg = BOSS_ABILITIES.frostQueen;
+    const shardCfg = cfg.abilities.find(a => a.id === 'iceShard');
+    const lanceCfg = cfg.abilities.find(a => a.id === 'iceLance');
+    const freezeCfg = cfg.abilities.find(a => a.id === 'freeze');
+    const wallCfg = cfg.abilities.find(a => a.id === 'iceWall');
+    const groundCfg = cfg.abilities.find(a => a.id === 'frozenGround');
+    const blizzardCfg = cfg.abilities.find(a => a.id === 'blizzard');
+    const absZeroCfg = cfg.abilities.find(a => a.id === 'absoluteZero');
+    const barrierCfg = cfg.abilities.find(a => a.id === 'iceBarrier');
+
     this.fqIceShardCd -= dt;
     this.fqFreezeCd -= dt;
     this.fqBlizzardCd -= dt;
@@ -1545,27 +1642,27 @@ export class Enemy {
       this.fqBlizzardT -= dt;
       if (this.fqBlizzardT <= 0) {
         this.fqBlizzardActive = false;
-      } else if (Math.random() < dt * 2) {
+      } else if (Math.random() < dt * blizzardCfg.tickChance) {
         for (const p of room.playersArr()) {
           if (!p.alive) continue;
-          if (Math.hypot(p.x - this.x, p.z - this.z) < 8) {
-            p.takeDamage(this.dmg * 0.8 * em, room);
-            p.enemySlowT = 2; p.enemySlowF = 0.3;
+          if (Math.hypot(p.x - this.x, p.z - this.z) < blizzardCfg.radius) {
+            p.takeDamage(this.dmg * blizzardCfg.dmgMul * em, room);
+            p.enemySlowT = blizzardCfg.slowDur; p.enemySlowF = blizzardCfg.slowFactor;
           }
         }
       }
     }
 
     // Ice barrier (phase 2+): absorb shield
-    if (this.phase >= 2 && this.fqIceBarrierCd <= 0 && this.fqIceBarrierHp <= 0) {
-      this.fqIceBarrierCd = this.phase >= 4 ? 8 : 12;
-      this.fqIceBarrierHp = this.maxHp * 0.1;
-      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 2, color: 0x88ccff });
-      room.sendEvent({ type: 'ann', text: 'ЛЕДЯНОЙ БАРЬЕР!', color: '#88ccff' });
+    if (this.phase >= barrierCfg.minPhase && this.fqIceBarrierCd <= 0 && this.fqIceBarrierHp <= 0) {
+      this.fqIceBarrierCd = getAbilityCd(barrierCfg, this.phase);
+      this.fqIceBarrierHp = this.maxHp * barrierCfg.hpPct;
+      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 2, color: barrierCfg.novaColor });
+      room.sendEvent({ type: 'ann', text: barrierCfg.text, color: barrierCfg.textColor });
     }
 
     // Maintain distance
-    const prefDist = this._kitingScore > 0.5 ? 8 : 10;
+    const prefDist = this._kitingScore > 0.5 ? cfg.preferredDistKiting : cfg.preferredDist;
     if (dist > prefDist + 2) {
       this.x += dirX * this.speed * sf * em * dt;
       this.z += dirZ * this.speed * sf * em * dt;
@@ -1580,96 +1677,97 @@ export class Enemy {
     this.x += sx * dt; this.z += sz * dt;
 
     // Ice shards
-    if (this.fqIceShardCd <= 0 && dist < 20) {
-      this.fqIceShardCd = this.phase >= 4 ? 1.0 : (this.phase >= 2 ? 1.5 : 2);
-      room.spawnBullet(this.x, 1.5, this.z, target, this.dmg * 0.85 * em, 0x88ccff);
-      target.enemySlowT = 3; target.enemySlowF = 0.5;
+    if (this.fqIceShardCd <= 0 && dist < shardCfg.maxRange) {
+      this.fqIceShardCd = getAbilityCd(shardCfg, this.phase);
+      room.spawnBullet(this.x, shardCfg.bulletY, this.z, target, this.dmg * shardCfg.dmgMul * em, shardCfg.bulletColor);
+      target.enemySlowT = shardCfg.slowDur; target.enemySlowF = shardCfg.slowFactor;
     }
 
     // Ice lance (phase 2+): high damage targeted
-    if (this.phase >= 2 && this.fqIceLanceCd <= 0 && dist < 16) {
-      this.fqIceLanceCd = this.phase >= 4 ? 3 : 5;
-      room.spawnBullet(this.x, 1.5, this.z, target, this.dmg * 1.5 * em, 0x4488ff);
-      target.enemySlowT = 4; target.enemySlowF = 0.3;
-      room.sendEvent({ type: 'skillfx', kind: 'text', text: 'ICE LANCE', x: target.x, y: 2.5, z: target.z, color: 0x4488ff });
+    if (this.phase >= lanceCfg.minPhase && this.fqIceLanceCd <= 0 && dist < lanceCfg.maxRange) {
+      this.fqIceLanceCd = getAbilityCd(lanceCfg, this.phase);
+      room.spawnBullet(this.x, lanceCfg.bulletY, this.z, target, this.dmg * lanceCfg.dmgMul * em, lanceCfg.bulletColor);
+      target.enemySlowT = lanceCfg.slowDur; target.enemySlowF = lanceCfg.slowFactor;
+      room.sendEvent({ type: 'skillfx', kind: 'text', text: lanceCfg.text, x: target.x, y: 2.5, z: target.z, color: lanceCfg.textColor });
     }
 
     // Freeze (phase 2+)
-    if (this.phase >= 2 && this.fqFreezeCd <= 0 && dist < 14) {
-      this.fqFreezeCd = this.phase >= 4 ? 5 : 8;
+    if (this.phase >= freezeCfg.minPhase && this.fqFreezeCd <= 0 && dist < freezeCfg.maxRange) {
+      this.fqFreezeCd = getAbilityCd(freezeCfg, this.phase);
       for (const p of room.playersArr()) {
         if (!p.alive) continue;
-        if (Math.hypot(p.x - this.x, p.z - this.z) < 6) {
-          p.stunT = 2;
-          p.takeDamage(this.dmg * 0.5 * em, room);
+        if (Math.hypot(p.x - this.x, p.z - this.z) < freezeCfg.radius) {
+          p.stunT = freezeCfg.stunDur;
+          p.takeDamage(this.dmg * freezeCfg.dmgMul * em, room);
         }
       }
-      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 6, color: 0x4488ff });
-      room.sendEvent({ type: 'ann', text: 'ЗАМОРОЗКА!', color: '#4488ff' });
+      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: freezeCfg.radius, color: 0x4488ff });
+      room.sendEvent({ type: 'ann', text: freezeCfg.text, color: freezeCfg.textColor });
     }
 
     // Frozen ground (phase 3+): zone that slows
-    if (this.phase >= 3 && this.fqFrozenGroundCd <= 0) {
-      this.fqFrozenGroundCd = this.phase >= 4 ? 6 : 9;
+    if (this.phase >= groundCfg.minPhase && this.fqFrozenGroundCd <= 0) {
+      this.fqFrozenGroundCd = getAbilityCd(groundCfg, this.phase);
       const fgx = target.x, fgz = target.z;
-      room.sendEvent({ type: 'skillfx', kind: 'zone', x: fgx, z: fgz, r: 5, dur: 5, color: 0x88ccff });
-      // Create a persistent slow zone (simplified: just apply slow to nearby)
+      room.sendEvent({ type: 'skillfx', kind: 'zone', x: fgx, z: fgz, r: groundCfg.radius, dur: groundCfg.duration, color: groundCfg.zoneColor });
       for (const p of room.playersArr()) {
         if (!p.alive) continue;
-        if (Math.hypot(p.x - fgx, p.z - fgz) < 5) {
-          p.enemySlowT = 4; p.enemySlowF = 0.4;
+        if (Math.hypot(p.x - fgx, p.z - fgz) < groundCfg.radius) {
+          p.enemySlowT = groundCfg.slowDur; p.enemySlowF = groundCfg.slowFactor;
         }
       }
     }
 
     // Ice wall (phase 2+)
-    if (this.phase >= 2) {
+    if (this.phase >= wallCfg.minPhase) {
       this._fqIceWallCd = (this._fqIceWallCd || 0) - dt;
-      if (this._fqIceWallCd <= 0 && dist < 14) {
-        this._fqIceWallCd = this.phase >= 4 ? 4 : 6;
+      if (this._fqIceWallCd <= 0 && dist < wallCfg.maxRange) {
+        this._fqIceWallCd = getAbilityCd(wallCfg, this.phase);
         const baseAngle = Math.atan2(dirX, dirZ);
-        for (let i = -3; i <= 3; i++) {
-          const a = baseAngle + i * 0.3;
+        for (let i = -(wallCfg.bulletCount - 1) / 2; i <= (wallCfg.bulletCount - 1) / 2; i++) {
+          const a = baseAngle + i * wallCfg.bulletSpread;
           room.bullets.push({
             id: 'b' + (++room._fbId),
-            x: this.x + Math.sin(a) * 3, y: 1.5, z: this.z + Math.cos(a) * 3,
-            vx: Math.sin(a) * 7, vy: 0, vz: Math.cos(a) * 7,
-            dmg: this.dmg * 0.5 * em, r: 0.25, life: 3, c: 0x4488ff,
+            x: this.x + Math.sin(a) * 3, y: wallCfg.bulletY || 1.5, z: this.z + Math.cos(a) * 3,
+            vx: Math.sin(a) * wallCfg.bulletSpeed, vy: 0, vz: Math.cos(a) * wallCfg.bulletSpeed,
+            dmg: this.dmg * wallCfg.dmgMul * em, r: wallCfg.bulletRadius, life: wallCfg.bulletLife, c: wallCfg.bulletColor,
           });
         }
       }
     }
 
     // Blizzard (phase 3+)
-    if (this.phase >= 3 && this.fqBlizzardCd <= 0 && !this.fqBlizzardActive) {
-      this.fqBlizzardCd = this.phase >= 4 ? 7 : 10;
+    if (this.phase >= blizzardCfg.minPhase && this.fqBlizzardCd <= 0 && !this.fqBlizzardActive) {
+      this.fqBlizzardCd = getAbilityCd(blizzardCfg, this.phase);
       this.fqBlizzardActive = true;
-      this.fqBlizzardT = 5;
-      room.sendEvent({ type: 'ann', text: 'МЕТЕЛЬ!', color: '#88ccff' });
-      room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: 8, dur: 1.5, color: 0x88ccff });
-      for (const p of room.playersArr()) {
-        if (!p.alive) continue;
-        if (Math.hypot(p.x - this.x, p.z - this.z) < 8) {
-          p.takeDamage(this.dmg * em, room);
-          p.enemySlowT = 5; p.enemySlowF = 0.3;
+      this.fqBlizzardT = blizzardCfg.duration;
+      room.sendEvent({ type: 'ann', text: blizzardCfg.text, color: blizzardCfg.textColor });
+      room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: blizzardCfg.radius, dur: blizzardCfg.teleDur, color: blizzardCfg.teleColor });
+      if (blizzardCfg.initialDmg) {
+        for (const p of room.playersArr()) {
+          if (!p.alive) continue;
+          if (Math.hypot(p.x - this.x, p.z - this.z) < blizzardCfg.radius) {
+            p.takeDamage(this.dmg * blizzardCfg.dmgMul * em, room);
+            p.enemySlowT = blizzardCfg.slowDur; p.enemySlowF = blizzardCfg.slowFactor;
+          }
         }
       }
     }
 
     // Absolute zero (phase 4): massive freeze + damage
-    if (this.phase >= 4 && this.fqAbsoluteZeroCd <= 0) {
-      this.fqAbsoluteZeroCd = 15;
+    if (this.phase >= absZeroCfg.minPhase && this.fqAbsoluteZeroCd <= 0) {
+      this.fqAbsoluteZeroCd = absZeroCfg.baseCd;
       for (const p of room.playersArr()) {
         if (!p.alive) continue;
         const pd = Math.hypot(p.x - this.x, p.z - this.z);
-        if (pd < 12) {
-          p.takeDamage(this.dmg * 1.8 * em, room);
-          p.stunT = 2.5;
-          p.enemySlowT = 5; p.enemySlowF = 0.2;
+        if (pd < absZeroCfg.radius) {
+          p.takeDamage(this.dmg * absZeroCfg.dmgMul * em, room);
+          p.stunT = absZeroCfg.stunDur;
+          p.enemySlowT = absZeroCfg.slowDur; p.enemySlowF = absZeroCfg.slowFactor;
         }
       }
-      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 12, color: 0x00ffff });
-      room.sendEvent({ type: 'ann', text: 'АБСОЛЮТНЫЙ НОЛЬ!', color: '#00ffff' });
+      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: absZeroCfg.radius, color: absZeroCfg.novaColor });
+      room.sendEvent({ type: 'ann', text: absZeroCfg.text, color: absZeroCfg.textColor });
     }
 
     this.y = Math.sin(room.time * 2.5 + this.seed) * 0.1;
@@ -1679,6 +1777,16 @@ export class Enemy {
   // ЛОРД ДРАКОНОВ: fire breath, tail sweep, flight, dive bomb, fire storm, roar
   // ========================================================================
   _dragonLordAI(dt, room, target, dist, dirX, dirZ, sf, em) {
+    const cfg = BOSS_ABILITIES.dragonLord;
+    const breathCfg = cfg.abilities.find(a => a.id === 'fireBreath');
+    const tailCfg = cfg.abilities.find(a => a.id === 'tailSweep');
+    const gustCfg = cfg.abilities.find(a => a.id === 'wingGust');
+    const roarCfg = cfg.abilities.find(a => a.id === 'dragonRoar');
+    const stormCfg = cfg.abilities.find(a => a.id === 'fireStorm');
+    const flightCfg = cfg.abilities.find(a => a.id === 'flight');
+    const diveCfg = cfg.abilities.find(a => a.id === 'diveBomb');
+    const minionCfg = cfg.abilities.find(a => a.id === 'minionSpawn');
+
     this.dlFireBreathCd -= dt;
     this.dlTailSweepCd -= dt;
     this.dlFlyCd -= dt;
@@ -1688,61 +1796,60 @@ export class Enemy {
     this.dlWingGustCd -= dt;
 
     if (this.isFlying) {
-      this.y = 3.5;
-      this.x += dirX * this.speed * 1.5 * sf * em * dt;
-      this.z += dirZ * this.speed * 1.5 * sf * em * dt;
+      this.y = flightCfg.flyHeight;
+      this.x += dirX * this.speed * flightCfg.flySpeedMul * sf * em * dt;
+      this.z += dirZ * this.speed * flightCfg.flySpeedMul * sf * em * dt;
       this.dlFlyTimer -= dt;
 
       // Rain fire
       if (this.dlFlyTimer <= 0) {
-        this.dlFlyTimer = 0.35;
-        for (let i = 0; i < 4; i++) {
-          const fx = this.x + (Math.random() - 0.5) * 8;
-          const fz = this.z + (Math.random() - 0.5) * 8;
+        this.dlFlyTimer = flightCfg.rainInterval;
+        for (let i = 0; i < flightCfg.rainCount; i++) {
+          const fx = this.x + (Math.random() - 0.5) * flightCfg.rainSpread;
+          const fz = this.z + (Math.random() - 0.5) * flightCfg.rainSpread;
           room.bullets.push({
             id: 'b' + (++room._fbId),
             x: fx, y: this.y, z: fz,
             vx: 0, vy: -10, vz: 0,
-            dmg: this.dmg * 0.7 * em, r: 0.3, life: 2, c: 0xff3300,
+            dmg: this.dmg * flightCfg.rainDmgMul * em, r: flightCfg.rainBulletRadius, life: flightCfg.rainBulletLife, c: flightCfg.rainBulletColor,
           });
         }
       }
 
       // Dive bomb (phase 3+)
-      if (this.phase >= 3 && this.dlDiveBombCd <= 0 && this.dlFlyTimer < 1) {
-        this.dlDiveBombCd = 8;
+      if (this.phase >= diveCfg.minPhase && this.dlDiveBombCd <= 0 && this.dlFlyTimer < 1) {
+        this.dlDiveBombCd = diveCfg.baseCd;
         this.isFlying = false;
         this.y = 0;
-        // Dive toward target
         this.bossState = 'dlDive';
-        this.bossStateT = 0.5;
+        this.bossStateT = diveCfg.teleDur;
         this.chargeDirX = dirX; this.chargeDirZ = dirZ;
-        room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: target.x, z: target.z, r: 3, dur: 0.5, color: 0xff4400 });
+        room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: target.x, z: target.z, r: diveCfg.hitRadius, dur: diveCfg.teleDur, color: diveCfg.teleColor });
         return;
       }
 
       if (this.dlFlyTimer <= -2.5) {
         this.isFlying = false;
         this.y = 0;
-        this.dlFlyCd = this.phase >= 4 ? 6 : 10;
+        this.dlFlyCd = getAbilityCd(flightCfg, this.phase);
         this.bossState = 'idle';
       }
     } else if (this.bossState === 'dlDive') {
       this.bossStateT -= dt;
-      this.x += this.chargeDirX * 30 * em * dt;
-      this.z += this.chargeDirZ * 30 * em * dt;
+      this.x += this.chargeDirX * diveCfg.speed * em * dt;
+      this.z += this.chargeDirZ * diveCfg.speed * em * dt;
       this.y = Math.max(0, this.bossStateT * 6);
       for (const p of room.playersArr()) {
         if (!p.alive) continue;
-        if (Math.hypot(p.x - this.x, p.z - this.z) < 3) {
-          p.takeDamage(this.dmg * 1.8 * em, room);
-          p.stunT = 1.0;
+        if (Math.hypot(p.x - this.x, p.z - this.z) < diveCfg.hitRadius) {
+          p.takeDamage(this.dmg * diveCfg.dmgMul * em, room);
+          p.stunT = diveCfg.stunDur;
         }
       }
       if (this.bossStateT <= 0) {
         this.bossState = 'idle';
         this.y = 0;
-        room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 4, color: 0xff4400 });
+        room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: diveCfg.radius, color: diveCfg.hitColor });
       }
     } else {
       // Ground phase
@@ -1754,108 +1861,109 @@ export class Enemy {
       }
 
       // Fire breath (cone)
-      if (this.dlFireBreathCd <= 0 && dist < 16) {
-        this.dlFireBreathCd = this.phase >= 4 ? 2 : (this.phase >= 2 ? 3 : 4);
+      if (this.dlFireBreathCd <= 0 && dist < breathCfg.maxRange) {
+        this.dlFireBreathCd = getAbilityCd(breathCfg, this.phase);
         const baseAngle = Math.atan2(dirX, dirZ);
-        const coneHalf = (90 * Math.PI / 180) / 2;
-        for (let i = 0; i < 10; i++) {
-          const a = baseAngle + (i - 4.5) * (coneHalf / 4.5);
+        const coneHalf = (breathCfg.coneAngle * Math.PI / 180) / 2;
+        for (let i = 0; i < breathCfg.bulletCount; i++) {
+          const a = baseAngle + (i - (breathCfg.bulletCount - 1) / 2) * (coneHalf / ((breathCfg.bulletCount - 1) / 2));
           room.bullets.push({
             id: 'b' + (++room._fbId),
             x: this.x, y: 1.8, z: this.z,
-            vx: Math.sin(a) * 12, vy: 0, vz: Math.cos(a) * 12,
-            dmg: this.dmg * 0.45 * em, r: 0.22, life: 3, c: 0xff4400,
+            vx: Math.sin(a) * breathCfg.bulletSpeed, vy: 0, vz: Math.cos(a) * breathCfg.bulletSpeed,
+            dmg: this.dmg * breathCfg.bulletDmgMul * em, r: breathCfg.bulletRadius, life: breathCfg.bulletLife, c: breathCfg.bulletColor,
           });
         }
         for (const p of room.playersArr()) {
           if (!p.alive) continue;
           const pd = Math.hypot(p.x - this.x, p.z - this.z);
-          if (pd > 10) continue;
+          if (pd > breathCfg.coneMaxRange) continue;
           const pAngle = Math.atan2(p.x - this.x, p.z - this.z);
           let diff = pAngle - baseAngle;
           while (diff > Math.PI) diff -= Math.PI * 2;
           while (diff < -Math.PI) diff += Math.PI * 2;
           if (Math.abs(diff) < coneHalf) {
-            p.takeDamage(this.dmg * 1.0 * em, room);
-            p.enemyBurnT = 3; p.enemyBurnDps = 8;
+            p.takeDamage(this.dmg * breathCfg.coneDmgMul * em, room);
+            p.enemyBurnT = breathCfg.burnDur; p.enemyBurnDps = breathCfg.burnDps;
           }
         }
-        room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 3, color: 0xff4400 });
+        room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 3, color: breathCfg.color });
       }
 
       // Tail sweep (phase 2+)
-      if (this.phase >= 2 && this.dlTailSweepCd <= 0 && dist < 6) {
-        this.dlTailSweepCd = this.phase >= 4 ? 3 : 5;
+      if (this.phase >= tailCfg.minPhase && this.dlTailSweepCd <= 0 && dist < tailCfg.maxRange) {
+        this.dlTailSweepCd = getAbilityCd(tailCfg, this.phase);
         for (const p of room.playersArr()) {
           if (!p.alive) continue;
-          if (Math.hypot(p.x - this.x, p.z - this.z) < 5) {
-            p.takeDamage(this.dmg * 0.9 * em, room);
+          if (Math.hypot(p.x - this.x, p.z - this.z) < tailCfg.radius) {
+            p.takeDamage(this.dmg * tailCfg.dmgMul * em, room);
             const kdx = p.x - this.x, kdz = p.z - this.z;
             const kd = Math.hypot(kdx, kdz) || 1;
-            p.vx += (kdx / kd) * 12; p.vz += (kdz / kd) * 12;
+            p.vx += (kdx / kd) * tailCfg.knockback; p.vz += (kdz / kd) * tailCfg.knockback;
           }
         }
-        room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 5, color: 0xcc4400 });
-        this._spawnMinions(room, this.phase >= 4 ? 4 : 2);
+        room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: tailCfg.radius, color: tailCfg.color });
+        const tailMinionCount = tailCfg.spawnMinionsByPhase[this.phase] || tailCfg.spawnMinionsByPhase[1];
+        this._spawnMinions(room, tailMinionCount);
       }
 
       // Wing gust (phase 2+): knockback cone
-      if (this.phase >= 2 && this.dlWingGustCd <= 0 && dist < 8) {
-        this.dlWingGustCd = this.phase >= 4 ? 5 : 8;
+      if (this.phase >= gustCfg.minPhase && this.dlWingGustCd <= 0 && dist < gustCfg.maxRange) {
+        this.dlWingGustCd = getAbilityCd(gustCfg, this.phase);
         for (const p of room.playersArr()) {
           if (!p.alive) continue;
-          if (Math.hypot(p.x - this.x, p.z - this.z) < 7) {
+          if (Math.hypot(p.x - this.x, p.z - this.z) < gustCfg.radius) {
             const kdx = p.x - this.x, kdz = p.z - this.z;
             const kd = Math.hypot(kdx, kdz) || 1;
-            p.vx += (kdx / kd) * 18; p.vz += (kdz / kd) * 18;
-            p.takeDamage(this.dmg * 0.5 * em, room);
+            p.vx += (kdx / kd) * gustCfg.knockback; p.vz += (kdz / kd) * gustCfg.knockback;
+            p.takeDamage(this.dmg * gustCfg.dmgMul * em, room);
           }
         }
-        room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 7, color: 0xff8800 });
+        room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: gustCfg.radius, color: gustCfg.color });
       }
 
       // Dragon roar (phase 3+): AoE stun
-      if (this.phase >= 3 && this.dlRoarCd <= 0 && dist < 10) {
-        this.dlRoarCd = this.phase >= 4 ? 8 : 14;
+      if (this.phase >= roarCfg.minPhase && this.dlRoarCd <= 0 && dist < roarCfg.maxRange) {
+        this.dlRoarCd = getAbilityCd(roarCfg, this.phase);
         for (const p of room.playersArr()) {
           if (!p.alive) continue;
-          if (Math.hypot(p.x - this.x, p.z - this.z) < 8) {
-            p.stunT = 1.5;
-            p.takeDamage(this.dmg * 0.6 * em, room);
+          if (Math.hypot(p.x - this.x, p.z - this.z) < roarCfg.radius) {
+            p.stunT = roarCfg.stunDur;
+            p.takeDamage(this.dmg * roarCfg.dmgMul * em, room);
           }
         }
-        room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 8, color: 0xff6600 });
-        room.sendEvent({ type: 'ann', text: 'РЁВ ДРАКОНА!', color: '#ff6600' });
+        room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: roarCfg.radius, color: roarCfg.color });
+        room.sendEvent({ type: 'ann', text: roarCfg.text, color: roarCfg.textColor });
       }
 
       // Fire storm (phase 3+): multiple fire zones
-      if (this.phase >= 3 && this.dlFireStormCd <= 0) {
-        this.dlFireStormCd = this.phase >= 4 ? 8 : 12;
-        for (let i = 0; i < 6; i++) {
-          const fx = target.x + (Math.random() - 0.5) * 12;
-          const fz = target.z + (Math.random() - 0.5) * 12;
-          room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: fx, z: fz, r: 2.5, dur: 1.2, color: 0xff3300 });
+      if (this.phase >= stormCfg.minPhase && this.dlFireStormCd <= 0) {
+        this.dlFireStormCd = getAbilityCd(stormCfg, this.phase);
+        for (let i = 0; i < stormCfg.count; i++) {
+          const fx = target.x + (Math.random() - 0.5) * stormCfg.spread;
+          const fz = target.z + (Math.random() - 0.5) * stormCfg.spread;
+          room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: fx, z: fz, r: stormCfg.radius, dur: stormCfg.teleDur, color: stormCfg.teleColor });
           setTimeout(() => {
             for (const p of room.playersArr()) {
               if (!p.alive) continue;
-              if (Math.hypot(p.x - fx, p.z - fz) < 2.5) {
-                p.takeDamage(this.dmg * 1.2 * em, room);
-                p.enemyBurnT = 3; p.enemyBurnDps = 8;
+              if (Math.hypot(p.x - fx, p.z - fz) < stormCfg.radius) {
+                p.takeDamage(this.dmg * stormCfg.dmgMul * em, room);
+                p.enemyBurnT = stormCfg.burnDur; p.enemyBurnDps = stormCfg.burnDps;
               }
             }
-            room.sendEvent({ type: 'skillfx', kind: 'nova', x: fx, z: fz, radius: 2.5, color: 0xff3300 });
+            room.sendEvent({ type: 'skillfx', kind: 'nova', x: fx, z: fz, radius: stormCfg.radius, color: stormCfg.hitColor });
           }, 1200);
         }
-        room.sendEvent({ type: 'ann', text: 'ОГНЕННЫЙ ШТОРМ!', color: '#ff3300' });
+        room.sendEvent({ type: 'ann', text: stormCfg.text, color: stormCfg.textColor });
       }
 
       // Take flight (phase 3+)
-      if (this.phase >= 3 && this.dlFlyCd <= 0) {
+      if (this.phase >= flightCfg.minPhase && this.dlFlyCd <= 0) {
         this.isFlying = true;
-        this.dlFlyTimer = 2.5;
-        this.dlFlyCd = this.phase >= 4 ? 6 : 8;
-        room.sendEvent({ type: 'ann', text: 'В ПОЛЁТ!', color: '#ff6600' });
-        room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 3, color: 0xff6600 });
+        this.dlFlyTimer = flightCfg.duration;
+        this.dlFlyCd = getAbilityCd(flightCfg, this.phase);
+        room.sendEvent({ type: 'ann', text: flightCfg.text, color: flightCfg.textColor });
+        room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 3, color: flightCfg.color });
       }
     }
 
@@ -1867,32 +1975,32 @@ export class Enemy {
   _fireSpiral(room, count) {
     const n = count || 8;
     this.spiralAngle += 0.5;
-    const color = this.type === 'necro' ? 0xb44dff : 0xff6a00;
-    const speed = this.phase >= 3 ? 12 : (this.phase >= 2 ? 11 : 9);
+    const bossCfg = BOSS_ABILITIES[this.type];
+    const spiralCfg = bossCfg?.abilities.find(a => a.id === 'spiral');
+    const color = spiralCfg?.bulletColor || 0xff6a00;
+    const speed = spiralCfg?.bulletSpeedByPhase?.[this.phase] || 9;
+    const dmgMul = spiralCfg?.bulletDmgMul || 0.45;
+    const bulletR = spiralCfg?.bulletRadius || 0.18;
+    const bulletLife = spiralCfg?.bulletLife || 4;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + this.spiralAngle;
       room.bullets.push({
         id: 'b' + (++room._fbId),
         x: this.x, y: 2.2, z: this.z,
         vx: Math.cos(a) * speed, vy: 0, vz: Math.sin(a) * speed,
-        dmg: this.dmg * 0.45, r: 0.18, life: 4, c: color,
+        dmg: this.dmg * dmgMul, r: bulletR, life: bulletLife, c: color,
       });
     }
   }
 
   // --- Спавн миньонов ---
   _spawnMinions(room, count) {
+    const bossCfg = BOSS_ABILITIES[this.type];
+    const minionType = bossCfg?.minionType || 'normal';
     for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2;
       const x = clamp(this.x + Math.cos(a) * 2.5, -ARENA.LIMIT + 2, ARENA.LIMIT - 2);
       const z = clamp(this.z + Math.sin(a) * 2.5, -ARENA.LIMIT + 2, ARENA.LIMIT - 2);
-      let minionType = 'normal';
-      if (this.type === 'golemKing') minionType = 'golem';
-      else if (this.type === 'dragonLord') minionType = 'berserker';
-      else if (this.type === 'frostQueen') minionType = 'frost_mage';
-      else if (this.type === 'shadowKing') minionType = 'phantom';
-      else if (this.type === 'necro') minionType = 'cursed';
-      else if (this.type === 'firelord') minionType = 'firestarter';
       const minion = new Enemy(minionType, x, z, 1, false);
       minion.isMinion = true;
       minion.maxHp = Math.round(minion.maxHp * 0.5);
@@ -1959,9 +2067,10 @@ export class Enemy {
   }
 
   hurt(amount, fromX, fromZ, kb = 6) {
-    // Golem King fortify: 60% damage reduction
+    // Golem King fortify: damage reduction
     if (this.type === 'golemKing' && this.gkFortifyT > 0) {
-      amount *= 0.4;
+      const fortCfg = BOSS_ABILITIES.golemKing?.abilities.find(a => a.id === 'fortify');
+      amount *= (1 - (fortCfg?.damageReduction || 0.6));
     }
     // Frost Queen ice barrier
     if (this.type === 'frostQueen' && this.fqIceBarrierHp > 0) {
@@ -1991,14 +2100,15 @@ export class Enemy {
     }
     // golemKing boss shield
     if (this.type === 'golemKing' && this.gkShieldHp > 0) {
+      const gkCfg = BOSS_ABILITIES.golemKing;
       const absorbed = Math.min(this.gkShieldHp, amount);
       this.gkShieldHp -= absorbed;
       amount -= absorbed;
       if (this.gkShieldHp <= 0 && !this.gkEnraged) {
         this.gkEnraged = true;
         this.gkShieldBroken = true;
-        this.speed *= 1.5;
-        this.dmg *= 1.3;
+        this.speed *= gkCfg.shieldBreakSpeedMul;
+        this.dmg *= gkCfg.shieldBreakDmgMul;
       }
       if (amount <= 0) { this.flash = 0.1; return false; }
     }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { NET, lerp } from '../../../shared/constants.js';
+import { NET } from '../../../shared/constants.js';
+import { lerp } from '../../../shared/client-constants.js';
 import { makeEnemy, makeHpBar } from '../render/Meshes.js';
 
 const TICK_S = NET.TICK_MS / 1000;

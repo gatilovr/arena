@@ -29,7 +29,9 @@ export const S = {
   START:    'start',    // игра начинается
   SNAP:     'snap',     // { tick, time, players, enemies, bullets, drops, wave, ... } — 20 Гц
   EVENT:    'event',    // игровые события (см. EV)
-  STATE:    'state',    // полный снапшот для позднего входа (инвентарь, скилы)
+  STATE:    'state',    // (legacy) полный снапшот — deprecated, см. PLAYER_STATE / ROOM_STATE
+  PLAYER_STATE: 'player_state', // данные конкретного игрока (инвентарь, скилы, экипировка)
+  ROOM_STATE:   'room_state',   // состояние комнаты (список игроков, хост)
   GAMEOVER: 'gameover', // { stats }
   PONG:     'pong'      // { t }
 };

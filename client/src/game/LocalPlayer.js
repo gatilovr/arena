@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { PLAYER, ARENA, NET, clamp, lerp, ITEMS } from '../../../shared/constants.js';
+import { PLAYER, ARENA, NET, clamp, ITEMS } from '../../../shared/constants.js';
+import { lerp, RECONCILE_THRESHOLD, RECONCILE_FACTOR } from '../../../shared/client-constants.js';
 import { integrateMovement } from '../../../shared/physics.js';
 import { makePlayerBody, makeSword, makeAxe, makeDagger, makeBow, makeStaff, makeTwoHandedSword } from '../render/Meshes.js';
 
@@ -109,9 +110,9 @@ export class LocalPlayer {
     }
     const dx = snap.x - this.x, dy = snap.y - this.y, dz = snap.z - this.z;
     const dist = Math.hypot(dx, dy, dz);
-    if (dist > NET.RECONCILE_THRESHOLD) {
+    if (dist > RECONCILE_THRESHOLD) {
       // плавная коррекция — не рывок, а лerp к серверной позиции
-      const k = NET.RECONCILE_FACTOR;
+      const k = RECONCILE_FACTOR;
       this.x += dx * k; this.y += dy * k; this.z += dz * k;
       // корректируем скорость, чтобы не дрift-ить обратно
       this.vx += dx * k * 30;

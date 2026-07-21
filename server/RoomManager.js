@@ -42,10 +42,15 @@ export class RoomManager {
     const session = this.sessions.get(token);
     if (!session) return;
     this.sessions.delete(token);
+    if (session._timer) { clearTimeout(session._timer); session._timer = null; }
     const room = this.rooms.get(session.roomId);
     if (room) {
       log.info(`Session expired for player ${session.playerId} in room ${session.roomId}`);
-      room.removePlayer(session.playerId);
+      // Only remove if player is still disconnected (not already reconnected)
+      const player = room.players.get(session.playerId);
+      if (player && player._disconnected) {
+        room.removePlayer(session.playerId);
+      }
     }
   }
 
@@ -124,13 +129,23 @@ export class RoomManager {
 
   _cleanupIdle() {
     const now = Date.now();
-    // Clean up expired sessions
+    // Collect items to remove first, then remove (avoid Map mutation during iteration)
+    const expiredSessions = [];
     for (const [token, session] of this.sessions) {
-      if (now > session.expiresAt) this._expireSession(token);
+      if (now > session.expiresAt) expiredSessions.push(token);
     }
+    for (const token of expiredSessions) this._expireSession(token);
+
+    const idleRooms = [];
     for (const [code, room] of this.rooms) {
       if ((room.state === ROOM_STATE.LOBBY || room.state === ROOM_STATE.OVER) &&
           now - room.lastActivity > IDLE_TIMEOUT_MS) {
+        idleRooms.push(code);
+      }
+    }
+    for (const code of idleRooms) {
+      const room = this.rooms.get(code);
+      if (room) {
         log.info(`Room idle timeout: ${code} (state=${room.state})`);
         room.destroy();
       }

@@ -236,38 +236,42 @@ export class Room {
     this.time += dt;
     this.tick++;
 
-    // игроки
-    for (const p of this.playersArr()) {
-      p.integrate(dt);
-      if (!p.alive && p.respawnT <= 0) {
-        p.spawn();
-        this.sendEvent({ type: 'respawn', pid: p.id });
+    try {
+      // игроки
+      for (const p of this.playersArr()) {
+        p.integrate(dt);
+        if (!p.alive && p.respawnT <= 0) {
+          p.spawn();
+          this.sendEvent({ type: 'respawn', pid: p.id });
+        }
+        // таймаут апгрейда
+        if (p.pendingUpgrade) {
+          p.pendingUpgrade.timer -= dt;
+          if (p.pendingUpgrade.timer <= 0) p.pendingUpgrade = null;
+        }
       }
-      // таймаут апгрейда
-      if (p.pendingUpgrade) {
-        p.pendingUpgrade.timer -= dt;
-        if (p.pendingUpgrade.timer <= 0) p.pendingUpgrade = null;
+
+      // враги
+      for (let i = this.enemies.length - 1; i >= 0; i--) {
+        const remove = this.enemies[i].update(dt, this);
+        if (remove) this.enemies.splice(i, 1);
       }
+      if (this.enemies.length) Enemy.separate(this.enemies);
+
+      // системы
+      this.combat.updateBullets(dt);
+      this.skills.update(dt);
+      this.loot.update(dt);
+      this.wave.update(dt);
+
+      // призванные прислужники
+      this._updateMinions(dt);
+
+      this.broadcastSnap();
+      this.checkGameOver();
+    } catch (err) {
+      console.error(`[Room ${this.code}] Tick ${this.tick} error:`, err);
     }
-
-    // враги
-    for (let i = this.enemies.length - 1; i >= 0; i--) {
-      const remove = this.enemies[i].update(dt, this);
-      if (remove) this.enemies.splice(i, 1);
-    }
-    if (this.enemies.length) Enemy.separate(this.enemies);
-
-    // системы
-    this.combat.updateBullets(dt);
-    this.skills.update(dt);
-    this.loot.update(dt);
-    this.wave.update(dt);
-
-    // призванные прислужники
-    this._updateMinions(dt);
-
-    this.broadcastSnap();
-    this.checkGameOver();
     this.manager.recordTickDuration(performance.now() - t0);
   }
 
@@ -346,7 +350,9 @@ export class Room {
   broadcast(msg) {
     const data = JSON.stringify(msg);
     for (const p of this.playersArr()) {
-      try { p.conn.ws.send(data); } catch (e) {}
+      try { p.conn.ws.send(data); } catch (e) {
+        // Broken connection — will be cleaned up on 'close' event
+      }
     }
   }
 

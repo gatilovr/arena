@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
+  <title>ARENA — кооп слэшер</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link href="https://cdn.jsdelivr.net/fontsource/css/russo-one@latest/cyrillic-400-normal.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/fontsource/css/rubik@latest/cyrillic-400-normal.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/fontsource/css/rubik@latest/cyrillic-700-normal.css" rel="stylesheet">
+  <link rel="stylesheet" href="/styles/main.css">
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+
+  <!-- ================= HUD ================= -->
+  <div id="hud" class="hidden">
+    <div id="look-zone"></div>
+    <div id="vignette"></div>
+    <div id="dmg-overlay"></div>
+
+    <div id="top-bar">
+      <div class="plate" id="score-box">
+        <div id="score-val">0</div>
+        <div class="sub-row"><span id="kills-val">☠ 0</span><span class="lvl-chip" id="lvl-val">УР 1</span></div>
+      </div>
+      <div class="plate" id="wave-box">
+        <div id="wave-num">ВОЛНА 1</div>
+        <div id="wave-left">врагов: 0</div>
+      </div>
+      <button id="pause-btn" class="pause-hud-btn">⏸</button>
+      <div id="fps-display">0 FPS</div>
+      <div id="ping-display">--ms</div>
+      <div id="team-box"></div>
+    </div>
+
+    <div id="bars">
+      <div class="bar-bg hp-bg"><div id="hp-fill"></div></div>
+      <div class="bar-bg xp-bg"><div id="xp-fill"></div></div>
+      <div id="hp-text">100 / 100</div>
+      <div id="buff-bar"></div>
+    </div>
+
+    <div id="combo-box">
+      <div id="combo-text">СЕРИЯ x2</div>
+      <div id="combo-multi">+8% урона</div>
+    </div>
+
+    <div id="boss-bar" class="hidden">
+      <div id="boss-name"></div>
+      <div class="bar-bg boss-bg"><div id="boss-fill"></div></div>
+    </div>
+
+    <div id="announce"></div>
+    <div id="wave-banner"><div id="banner-main"></div><div id="banner-sub"></div></div>
+    <div id="respawn-overlay" class="hidden"><div id="respawn-t">5</div><div>ВОЗРОЖДЕНИЕ…</div></div>
+
+    <!-- тач-управление -->
+    <div id="joystick-zone"><div id="joystick-base"></div><div id="joystick-knob"></div></div>
+    <div id="touch-pad">
+      <div class="tp-row">
+        <div class="act-btn sm" id="btn-dash"><span class="ico">💨</span></div>
+        <div class="act-btn sm" id="btn-jump"><span class="ico">⬆️</span></div>
+      </div>
+      <div class="act-btn big" id="btn-atk"><span class="ico">⚔️</span></div>
+      <div class="tp-row tp-utils">
+        <div class="act-btn sm tp-util" id="btn-inv"><span class="ico">🎒</span></div>
+        <div class="act-btn sm tp-util" id="btn-book"><span class="ico">📖</span></div>
+      </div>
+    </div>
+
+    <!-- скил-панель -->
+    <div id="skill-pad">
+      <div class="sk-row">
+        <div class="sk-btn empty" id="sk0" data-skill-slot="0"><span class="sk-ico">＋</span><span class="key-badge">1</span><div class="cd-overlay" id="sk0-cd"></div></div>
+        <div class="sk-btn empty" id="sk1" data-skill-slot="1"><span class="sk-ico">＋</span><span class="key-badge">2</span><div class="cd-overlay" id="sk1-cd"></div></div>
+        <div class="sk-btn" id="btn-ult"><span class="sk-ico">⚡</span><span class="key-badge">F</span><div class="cd-overlay" id="ult-cd"></div></div>
+      </div>
+      <div id="ult-bar"><div id="ult-fill"></div></div>
+      <div id="ult-label">УЛЬТА</div>
+    </div>
+
+    <canvas id="radar" width="96" height="96"></canvas>
+
+    <div id="pc-hints">
+      <b>WASD</b> бег · <b>ЛКМ</b> атака · <b>ПКМ</b> камера · <b>SPACE</b> прыжок · <b>SHIFT</b> рывок<br>
+      <b>1/2</b> скилы · <b>F</b> ульта · <b>I</b> инвентарь · <b>K</b> гримуар · <b>ESC</b> пауза
+    </div>
+  </div>
+
+  <div id="float-layer"></div>
+  <div id="toast"></div>
+
+  <!-- ================= ВЫБОР УЛУЧШЕНИЯ ================= -->
+  <div id="upgrade-screen" class="screen hidden">
+    <div class="menu-inner">
+      <div id="upgrade-level" class="ovl-title" style="color:var(--cyan);text-align:center">УРОВЕНЬ 2!</div>
+      <div class="ovl-sub" style="text-align:center">ВЫБЕРИ УЛУЧШЕНИЕ</div>
+      <div id="upgrade-cards" class="upgrade-cards-grid"></div>
+    </div>
+  </div>
+
+  <!-- ================= ЛОББИ ================= -->
+  <div id="lobby" class="screen">
+    <div class="menu-inner">
+      <div class="brand-tag">КООПЕРАТИВ 1–4 ИГРОКА · БРАУЗЕР</div>
+      <h1 class="title">ARENA</h1>
+      <div class="subtitle">Выживай в орде вместе с друзьями. Локально по Wi-Fi или онлайн.</div>
+
+      <button class="ghost-btn lobby-settings-btn" id="lobby-settings">⚙ НАСТРОЙКИ</button>
+
+      <div id="lobby-connect">
+        <div class="field">
+          <label>Твоё имя</label>
+          <input id="inp-name" type="text" maxlength="16" placeholder="Боец" autocomplete="off">
+        </div>
+        <div class="lobby-btns">
+          <button class="big-btn" id="btn-create">▶ СОЗДАТЬ ИГРУ</button>
+          <div class="join-row">
+            <input id="inp-room" type="text" maxlength="5" placeholder="КОД" autocomplete="off">
+            <button class="ghost-btn" id="btn-join">ВОЙТИ</button>
+          </div>
+        </div>
+        <div class="menu-hint" id="status-line">Подключение к серверу…</div>
+      </div>
+
+      <div id="lobby-room" class="hidden">
+        <div class="room-code-plate">КОД КОМНАТЫ: <span id="room-code">—</span></div>
+        <div class="menu-hint">Передай код друзьям — пусть введут его во «ВОЙТИ».</div>
+        <div id="player-list"></div>
+        <button class="big-btn hidden" id="btn-start">⚔️ НАЧАТЬ БОЙ</button>
+        <div class="menu-hint" id="wait-line"></div>
+        <button class="ghost-btn" id="btn-leave">← ПОКИНУТЬ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ИНВЕНТАРЬ ================= -->
+  <div id="inv-screen" class="screen hidden">
+    <button class="close-x" id="inv-close">✕</button>
+    <div class="menu-inner">
+      <div class="ovl-title">🎒 ИНВЕНТАРЬ</div>
+      <div class="ovl-sub">ТАП — ВЫБРАТЬ · ПЕРЕТАЩИ НА СЛОТ ЧТОБЫ НАДЕТЬ · ИГРА НА ПАУЗЕ</div>
+      <div class="panel-grid">
+        <div class="equip-col">
+          <div class="equip-slot" id="slot-weapon" data-equip-slot="weapon"><div class="eq-ico">🗡️</div><div><div class="eq-tag">ОРУЖИЕ</div><div class="eq-name">—</div></div></div>
+          <div class="equip-slot" id="slot-relic1" data-equip-slot="relic1"><div class="eq-ico">🔮</div><div><div class="eq-tag">РЕЛИКВИЯ I</div><div class="eq-name">—</div></div></div>
+          <div class="equip-slot" id="slot-relic2" data-equip-slot="relic2"><div class="eq-ico">🔮</div><div><div class="eq-tag">РЕЛИКВИЯ II</div><div class="eq-name">—</div></div></div>
+        </div>
+        <div class="inv-grid" id="inv-grid"></div>
+      </div>
+      <div class="trash-zone" id="trash-zone">🗑 СЮДА — ПРОДАТЬ ЛИШНЕЕ</div>
+      <div class="info-panel" id="inv-info"></div>
+      <div class="stats-sum" id="inv-stats"></div>
+    </div>
+  </div>
+
+  <!-- ================= ГРИМУАР ================= -->
+  <div id="book-screen" class="screen hidden">
+    <button class="close-x" id="book-close">✕</button>
+    <div class="menu-inner">
+      <div class="ovl-title">📖 ГРИМУАР</div>
+      <div class="ovl-sub">ТАП — ИНФО · ПЕРЕТАЩИ НА СЛОТ — НАЗНАЧИТЬ · 2 СКИЛА ИЗ СЕТА = АУРА</div>
+      <div class="sk-slots">
+        <div class="sk-slot" id="book-slot0" data-skill-slot="0"><span class="ss-ico">＋</span><span class="sl-tag">ПАНЕЛЬ</span><span class="sl-key">1</span></div>
+        <div class="sk-slot" id="book-slot1" data-skill-slot="1"><span class="ss-ico">＋</span><span class="sl-tag">ПАНЕЛЬ</span><span class="sl-key">2</span></div>
+      </div>
+      <div class="inv-grid" id="skill-coll" style="grid-template-columns:repeat(4,62px)"></div>
+      <div class="info-panel" id="book-info"></div>
+      <div class="sets-list" id="sets-list"></div>
+    </div>
+  </div>
+
+  <!-- ================= GAME OVER ================= -->
+  <div id="gameover-screen" class="screen hidden">
+    <div class="menu-inner">
+      <div class="ovl-title" style="color:var(--blood)">GAME OVER</div>
+      <div class="ovl-sub">ПОРАЖЕНИЕ</div>
+      <div class="go-stats">
+        <div class="go-stat"><div class="go-stat-val" id="go-wave">0</div><div class="go-stat-label">ВОЛНА</div></div>
+        <div class="go-stat"><div class="go-stat-val" id="go-kills">0</div><div class="go-stat-label">УБИЙСТВ</div></div>
+        <div class="go-stat"><div class="go-stat-val" id="go-score">0</div><div class="go-stat-label">ОЧКОВ</div></div>
+        <div class="go-stat"><div class="go-stat-val" id="go-time">0:00</div><div class="go-stat-label">ВРЕМЯ</div></div>
+      </div>
+      <div class="ovl-sub" style="margin-top:16px;margin-bottom:8px">ИГРОКИ</div>
+      <div id="go-player-list" class="go-player-list"></div>
+      <button class="big-btn" id="go-lobby" style="margin-top:18px">В ЛОББИ</button>
+    </div>
+  </div>
+
+  <!-- ================= НАСТРОЙКИ ================= -->
+  <div id="settings-screen" class="screen hidden">
+    <button class="close-x" id="settings-close">✕</button>
+    <div class="menu-inner">
+      <div class="ovl-title">⚙ НАСТРОЙКИ</div>
+      <div class="ovl-sub">НАСТРОЙ ПОД СЕБЯ · СОХРАНЯЕТСЯ АВТОМАТИЧЕСКИ</div>
+
+      <div class="settings-row">
+        <div class="settings-label">ЧУВСТВИТЕЛЬНОСТЬ КАМЕРЫ</div>
+        <div class="settings-slider-row">
+          <input type="range" id="settings-sensitivity" min="0.2" max="3" step="0.1" class="settings-slider">
+          <span id="settings-sens-val" class="settings-slider-val">1.0</span>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <div class="settings-label">ЗВУК</div>
+        <div id="settings-sound-toggle" class="toggle-switch on"></div>
+      </div>
+
+      <div class="settings-row">
+        <div class="settings-label">КАЧЕСТВО</div>
+        <button id="settings-quality-btn" class="ghost-btn settings-q-btn">ВЫСОКОЕ</button>
+      </div>
+
+      <div class="settings-row">
+        <button class="ghost-btn settings-reset-btn" id="settings-reset">СБРОСИТЬ НАСТРОЙКИ</button>
+      </div>
+
+      <button class="big-btn" id="settings-back">← НАЗАД</button>
+    </div>
+  </div>
+
+  <!-- ================= ПАУЗА ================= -->
+  <div id="pause-screen" class="screen hidden">
+    <div class="menu-inner">
+      <div class="ovl-title">⏸ ПАУЗА</div>
+      <div class="ovl-sub">ИГРА ПРОДОЛЖАЕТСЯ ДЛЯ ДРУГИХ ИГРОКОВ</div>
+
+      <div class="pause-btns">
+        <button class="big-btn" id="pause-resume">▶ ПРОДОЛЖИТЬ</button>
+        <button class="ghost-btn" id="pause-settings">⚙ НАСТРОЙКИ</button>
+        <button class="ghost-btn" id="pause-inventory">🎒 ИНВЕНТАРЬ</button>
+        <button class="ghost-btn" id="pause-grimoire">📖 ГРИМУАР</button>
+        <button class="ghost-btn pause-leave" id="pause-leave">← ПОКИНУТЬ ИГРУ</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rotate-hint"><div class="phone-ico">📱</div><div>ПОВЕРНИ ЭКРАН ГОРИЗОНТАЛЬНО</div></div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

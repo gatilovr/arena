@@ -839,12 +839,6 @@ export class Enemy {
   // Priority-based adaptive AI, works with 1-4 players
   // ========================================================================
   _rebraddAI(dt, room, target, dist, dirX, dirZ, sf, em) {
-    const cfg = BOSS_ABILITIES.rebradd;
-    const cf4Cfg = cfg.abilities.find(a => a.id === 'coldflame4');
-    const cf1Cfg = cfg.abilities.find(a => a.id === 'coldflame1');
-    const bsCfg = cfg.abilities.find(a => a.id === 'boneStorm');
-    const mcCfg = cfg.abilities.find(a => a.id === 'meleeCleave');
-
     // Cooldowns
     this.rebraddCf4Cd -= dt;
     this.rebraddCf1Cd -= dt;
@@ -852,104 +846,47 @@ export class Enemy {
     this.rebraddMcCd -= dt;
     this.bossStateT -= dt;
 
+    // DEBUG
+    if (!this._debugTick) this._debugTick = 0;
+    this._debugTick++;
+    if (this._debugTick % 60 === 0) {
+      console.log(`[REBRADD] state=${this.bossState} dist=${dist.toFixed(1)} bsCd=${this.rebraddBsCd.toFixed(1)} mcCd=${this.rebraddMcCd.toFixed(1)} cf1Cd=${this.rebraddCf1Cd.toFixed(1)} cf4Cd=${this.rebraddCf4Cd.toFixed(1)} stateT=${this.bossStateT.toFixed(2)}`);
+    }
+
     // Bone Storm active
     if (this.bossState === 'boneStorm') {
-      this._updateBoneStorm(dt, room, bsCfg, em);
+      this._updateBoneStorm(dt, room, null, em);
       this.y = 0.3 + Math.sin(room.time * 15) * 0.15;
       return;
     }
 
-    // Bone Storm cooldown ready check
-    if (this.rebraddBsCd <= 0 && this.bossState === 'idle') {
-      // Find best cluster for bone storm
-      const cluster = this._findBestCluster(room);
-      if (cluster) {
-        this.bossState = 'boneStormTele';
-        this.bossStateT = bsCfg.teleDur;
-        this._bsTargetX = cluster.x;
-        this._bsTargetZ = cluster.z;
-        this._bsJumpsLeft = this._randInt(bsCfg.jumpCount[0], bsCfg.jumpCount[1]);
-        this._bsDuration = this._randFloat(bsCfg.spinDuration[0], bsCfg.spinDuration[1]);
-        this._bsHitTimer = 0;
-        this.rebraddBsCd = bsCfg.baseCd;
-        room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: 3, dur: bsCfg.teleDur, color: bsCfg.teleColor });
-        room.sendEvent({ type: 'ann', text: 'BONE STORM!', color: '#88ccff' });
-        return;
-      }
-    }
-
-    // Melee Cleave
-    if (this.rebraddMcCd <= 0 && dist < mcCfg.range && this.bossState === 'idle') {
-      this.bossState = 'cleaveTele';
-      this.bossStateT = mcCfg.teleDur;
-      this.rebraddMcCd = mcCfg.baseCd;
-      room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x + dirX * 2, z: this.z + dirZ * 2, r: 1.5, dur: mcCfg.teleDur, color: mcCfg.teleColor });
-      return;
-    }
-
-    // Coldflame 1 direction (if player far)
-    if (this.rebraddCf1Cd <= 0 && dist > 6 && this.bossState === 'idle') {
-      this.bossState = 'cf1Tele';
-      this.bossStateT = cf1Cfg.teleDur;
-      this._cf1DirX = dirX;
-      this._cf1DirZ = dirZ;
-      this.rebraddCf1Cd = cf1Cfg.baseCd;
-      room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x + dirX * 3, z: this.z + dirZ * 3, r: 1, dur: cf1Cfg.teleDur, color: cf1Cfg.teleColor });
-      return;
-    }
-
-    // Coldflame 4 directions (if players spread around)
-    if (this.rebraddCf4Cd <= 0 && this.bossState === 'idle') {
-      const players = room.playersArr().filter(p => p.alive);
-      if (players.length >= 1) {
-        this.bossState = 'cf4Tele';
-        this.bossStateT = cf4Cfg.teleDur;
-        this.rebraddCf4Cd = cf4Cfg.baseCd;
-        // Find 4 directions covering most players
-        this._cf4Dirs = this._findBest4Dirs(players);
-        room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: 2, dur: cf4Cfg.teleDur, color: cf4Cfg.teleColor });
-        return;
-      }
-    }
-
-    // Idle movement — chase target
-    if (this.bossState === 'idle' && dist > 2.5) {
-      const chaseSpeed = this.speed * sf * em * (this._kitingScore > 0.5 ? 1.3 : 1);
-      const strafeAmt = this._strafeDir * this.speed * 0.3 * sf;
-      this.x += (dirX * chaseSpeed - dirZ * strafeAmt) * dt;
-      this.z += (dirZ * chaseSpeed + dirX * strafeAmt) * dt;
-    }
-
-    // State machine transitions
+    // State machine transitions FIRST (before new ability selection)
     switch (this.bossState) {
       case 'boneStormTele': {
         if (this.bossStateT <= 0) {
-          // Jump to target position
           this.x = this._bsTargetX;
           this.z = this._bsTargetZ;
           this.bossState = 'boneStorm';
           this._bsSpinTimer = 0;
           this._bsTotalTime = 0;
         }
-        break;
+        return; // don't select new abilities during telegraph
       }
       case 'cf1Tele': {
         if (this.bossStateT <= 0) {
-          // Spawn coldflame line
-          this._spawnColdflameLine(room, this.x, this.z, this._cf1DirX, this._cf1DirZ, cf1Cfg);
+          this._spawnColdflameLine(room, this.x, this.z, this._cf1DirX, this._cf1DirZ, 10, 2.5, 0x4488ff);
           this.bossState = 'idle';
         }
-        break;
+        return;
       }
       case 'cf4Tele': {
         if (this.bossStateT <= 0) {
-          // Spawn 4 coldflame lines
           for (const dir of this._cf4Dirs) {
-            this._spawnColdflameLine(room, this.x, this.z, dir.x, dir.z, cf4Cfg);
+            this._spawnColdflameLine(room, this.x, this.z, dir.x, dir.z, 12, 3, 0x4488ff);
           }
           this.bossState = 'idle';
         }
-        break;
+        return;
       }
       case 'cleaveTele': {
         if (this.bossStateT <= 0) {
@@ -957,24 +894,84 @@ export class Enemy {
           for (const p of room.playersArr()) {
             if (!p.alive) continue;
             const pd = Math.hypot(p.x - this.x, p.z - this.z);
-            if (pd > mcCfg.range) continue;
+            if (pd > 4.5) continue;
             const dot = (p.x - this.x) * dirX + (p.z - this.z) * dirZ;
-            if (dot < 0) continue; // behind boss
+            if (dot < 0) continue;
             const angle = Math.acos(dot / (pd || 1));
-            if (angle < mcCfg.coneAngle) {
-              p.takeDamage(this.dmg * mcCfg.dmgMul * em, room);
-              // Knockback
+            if (angle < 0.7) {
+              p.takeDamage(this.dmg * 1.2 * em, room);
               const kx = p.x - this.x, kz = p.z - this.z;
               const kd = Math.hypot(kx, kz) || 1;
-              p.vx += (kx / kd) * mcCfg.knockback;
-              p.vz += (kz / kd) * mcCfg.knockback;
+              p.vx += (kx / kd) * 6;
+              p.vz += (kz / kd) * 6;
             }
           }
-          room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x + dirX * 2, z: this.z + dirZ * 2, radius: 2, color: mcCfg.color });
+          room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x + dirX * 2, z: this.z + dirZ * 2, radius: 2, color: 0xff4444 });
           this.bossState = 'idle';
         }
-        break;
+        return;
       }
+    }
+
+    // IDLE: select next ability
+    if (this.bossState !== 'idle') return;
+
+    // Priority 1: Melee Cleave (if close, 2s CD)
+    if (this.rebraddMcCd <= 0 && dist < 4.5) {
+      this.bossState = 'cleaveTele';
+      this.bossStateT = 0.4;
+      this.rebraddMcCd = 2;
+      room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x + dirX * 2, z: this.z + dirZ * 2, r: 1.5, dur: 0.4, color: 0xcc2222 });
+      return;
+    }
+
+    // Priority 2: Coldflame 1 direction (if far, 5s CD)
+    if (this.rebraddCf1Cd <= 0 && dist > 6) {
+      this.bossState = 'cf1Tele';
+      this.bossStateT = 0.5;
+      this._cf1DirX = dirX;
+      this._cf1DirZ = dirZ;
+      this.rebraddCf1Cd = 5;
+      room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x + dirX * 3, z: this.z + dirZ * 3, r: 1, dur: 0.5, color: 0x2266cc });
+      return;
+    }
+
+    // Priority 3: Coldflame 4 directions (8s CD)
+    if (this.rebraddCf4Cd <= 0) {
+      const players = room.playersArr().filter(p => p.alive);
+      if (players.length >= 1) {
+        this.bossState = 'cf4Tele';
+        this.bossStateT = 0.6;
+        this.rebraddCf4Cd = 8;
+        this._cf4Dirs = this._findBest4Dirs(players);
+        room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: 2, dur: 0.6, color: 0x2266cc });
+        return;
+      }
+    }
+
+    // Priority 4: Bone Storm (18s CD)
+    if (this.rebraddBsCd <= 0) {
+      const cluster = this._findBestCluster(room);
+      if (cluster) {
+        this.bossState = 'boneStormTele';
+        this.bossStateT = 1.0;
+        this._bsTargetX = cluster.x;
+        this._bsTargetZ = cluster.z;
+        this._bsJumpsLeft = 2 + Math.floor(Math.random() * 2);
+        this._bsDuration = 7 + Math.random() * 5;
+        this._bsHitTimer = 0;
+        this.rebraddBsCd = 18;
+        room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: 3, dur: 1.0, color: 0xaaaacc });
+        room.sendEvent({ type: 'ann', text: 'BONE STORM!', color: '#88ccff' });
+        return;
+      }
+    }
+
+    // Idle movement — chase target
+    if (dist > 2.5) {
+      const chaseSpeed = this.speed * sf * em;
+      this.x += dirX * chaseSpeed * dt;
+      this.z += dirZ * chaseSpeed * dt;
     }
 
     this.y = Math.abs(Math.sin(room.time * 5)) * 0.08;
@@ -1082,22 +1079,20 @@ export class Enemy {
     }));
   }
 
-  _spawnColdflameLine(room, startX, startZ, dirX, dirZ, cfg) {
+  _spawnColdflameLine(room, startX, startZ, dirX, dirZ, range, duration, color) {
     const segments = 6;
-    const segLen = cfg.range || 15;
     for (let i = 0; i < segments; i++) {
       const t = i * 0.3;
-      const x = startX + dirX * segLen * (i / segments);
-      const z = startZ + dirZ * segLen * (i / segments);
-      // Damage zone that persists
+      const x = startX + dirX * range * (i / segments);
+      const z = startZ + dirZ * range * (i / segments);
       room.zones.push({
         id: 'cf' + (++room._fbId),
         x, z,
-        r: cfg.width,
-        dmg: this.dmg * cfg.dmgMul,
-        life: cfg.duration,
+        r: 1.5,
+        dmg: this.dmg * 0.8,
+        life: duration,
         timer: t,
-        color: cfg.color,
+        color,
         owner: this,
         slowF: 0.6,
         slowT: 1.5,
@@ -1105,8 +1100,8 @@ export class Enemy {
     }
     room.sendEvent({ type: 'skillfx', kind: 'beam',
       x: startX, y: 0.5, z: startZ,
-      x2: startX + dirX * segLen, y2: 0.5, z2: startZ + dirZ * segLen,
-      color: cfg.color
+      x2: startX + dirX * range, y2: 0.5, z2: startZ + dirZ * range,
+      color
     });
   }
 

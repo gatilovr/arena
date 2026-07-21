@@ -55,13 +55,13 @@ export const BOSS_ABILITIES = {
       },
       {
         id: 'meleeCleave',
-        baseCd: 4,
-        dmgMul: 1.0,
-        coneAngle: 0.7,
-        range: 4.0,
-        knockback: 5,
+        baseCd: 5,
+        dmgMul: 0.8,
+        coneAngle: 0.6,
+        range: 3.5,
+        knockback: 4,
         color: 0xff4444,
-        teleDur: 0.5,
+        teleDur: 0.6,
         teleColor: 0xcc2222
       }
     ]

@@ -350,6 +350,7 @@ export class Room {
   broadcast(msg) {
     const data = JSON.stringify(msg);
     for (const p of this.playersArr()) {
+      if (p._disconnected) continue; // skip disconnected players
       try { p.conn.ws.send(data); } catch (e) {
         // Broken connection — will be cleaned up on 'close' event
       }

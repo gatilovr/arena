@@ -383,7 +383,7 @@ export class Enemy {
         if (this.hp <= 0 && !this.dying) {
           this.kill();
           if (this.burnBy) room.combat.onKill(this, this.burnBy);
-          return false;
+          return true; // remove from array immediately
         }
       }
     }

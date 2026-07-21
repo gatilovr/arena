@@ -216,7 +216,14 @@ export class HUD {
       const name = b.name || b.type || '??';
       const durText = b.dur > 0 ? Math.ceil(b.dur) + 'с' : '';
       el.title = name + ': ' + durText;
-      el.innerHTML = `<span class="buff-chip-icon">${b.icon || '?'}</span><span class="buff-chip-dur">${durText}</span>`;
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'buff-chip-icon';
+      iconSpan.textContent = b.icon || '?';
+      const durSpan = document.createElement('span');
+      durSpan.className = 'buff-chip-dur';
+      durSpan.textContent = durText;
+      el.appendChild(iconSpan);
+      el.appendChild(durSpan);
       if (b.color) el.style.borderColor = b.color;
       bar.appendChild(el);
     }

@@ -31,18 +31,33 @@ export class Room {
     this.tick = 0;
     this._fbId = 0;
 
+    // seedable PRNG (mulberry32) — deterministic randomness for reproducible bugs
+    this._rngState = 0 | (Date.now() ^ (Math.random() * 0xFFFFFFFF));
+
     this.wave = new WaveSystem(this);
     this.combat = new CombatSystem(this);
     this.loot = new LootSystem(this);
     this.skills = new SkillSystem(this);
 
+    this.lastActivity = Date.now();
     this._timer = setInterval(() => this.update(), NET.TICK_MS);
   }
 
   playersArr() { return [...this.players.values()]; }
 
+  touch() { this.lastActivity = Date.now(); }
+
+  /** Mulberry32 PRNG — returns [0, 1). Seed via this._rngState = <int>. */
+  rng() {
+    let t = (this._rngState += 0x6D2B79F5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+
   // --- управление составом ---
   addPlayer(conn, name) {
+    this.touch();
     if (this.players.size >= MAX_PLAYERS) return null;
     const slot = this.freeSlot();
     const p = new Player(conn, name, slot);
@@ -108,6 +123,7 @@ export class Room {
   // --- ввод от клиента ---
   handleInput(p, m) {
     if (this.state !== ROOM_STATE.PLAYING) return;
+    this.touch();
     p.setInput(m.mx || 0, m.mz || 0, m.yaw || 0, m.pitch || 0);
     if (m.jump) p.tryJump();
     if (m.dash) p.tryDash();
@@ -119,6 +135,7 @@ export class Room {
 
   // --- обработка сообщений от клиента ---
   handleMessage(player, m) {
+    this.touch();
     switch (m.t) {
       case 'equip': {
         // Validate invIdx is valid index and slot is valid
@@ -176,6 +193,7 @@ export class Room {
   // --- главный цикл ---
   update() {
     if (this.state !== ROOM_STATE.PLAYING) return;
+    const t0 = performance.now();
     const dt = NET.TICK_MS / 1000;
     this.time += dt;
     this.tick++;
@@ -212,6 +230,7 @@ export class Room {
 
     this.broadcastSnap();
     this.checkGameOver();
+    this.manager.recordTickDuration(performance.now() - t0);
   }
 
   handleRevive(player) {

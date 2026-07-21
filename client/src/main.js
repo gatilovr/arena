@@ -2,7 +2,7 @@ import { NetClient } from './net/NetClient.js';
 import { Lobby } from './ui/Lobby.js';
 import { Game } from './game/Game.js';
 import { AudioSys, sfx } from './audio/AudioSys.js';
-import { S, ROOM_STATE } from '../../shared/protocol.js';
+import { S, ROOM_STATE, PROTOCOL_VERSION } from '../../shared/protocol.js';
 
 // ============================================================================
 // MAIN — точка входа клиента: связывает сеть, лобби и игру, определяет режим
@@ -37,6 +37,11 @@ document.getElementById('lobby-settings').addEventListener('click', () => {
 
 // сервер подтвердил вход в комнату
 net.on(S.JOINED, (data) => {
+  if (data.protocolVersion !== PROTOCOL_VERSION) {
+    console.error(`Protocol mismatch: client=${PROTOCOL_VERSION} server=${data.protocolVersion}`);
+    lobby.onError('Версия протокола не совпадает. Обновите клиент и сервер.');
+    return;
+  }
   game.reset();
   lobby.onJoined(data);
   lobby.show();

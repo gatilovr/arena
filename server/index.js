@@ -6,11 +6,15 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
 import { RoomManager } from './RoomManager.js';
-import { C, S } from '../shared/protocol.js';
+import { C, S, PROTOCOL_VERSION } from '../shared/protocol.js';
+import { createLogger } from '../shared/logger.js';
+
+const log = createLogger('server');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3001;
 const IS_PROD = process.env.NODE_ENV === 'production';
+const SERVER_START = Date.now();
 
 const app = express();
 const server = http.createServer(app);
@@ -27,22 +31,36 @@ if (IS_PROD && fs.existsSync(distPath)) {
 
 // Здоровье/статистика (пригодится для мониторинга и будущего интернета)
 const manager = new RoomManager();
-app.get('/api/status', (req, res) => res.json({ ok: true, ...manager.stats() }));
+app.get('/api/status', (req, res) => {
+  const roomBreakdown = { lobby: 0, playing: 0, over: 0 };
+  let totalPlayers = 0;
+  for (const room of manager.rooms.values()) {
+    if (roomBreakdown[room.state] !== undefined) roomBreakdown[room.state]++;
+    totalPlayers += room.players.size;
+  }
 
-// --- Server logging ---
-function logTime() {
-  const now = new Date();
-  const hh = String(now.getHours()).padStart(2, '0');
-  const mm = String(now.getMinutes()).padStart(2, '0');
-  const ss = String(now.getSeconds()).padStart(2, '0');
-  return `${hh}:${mm}:${ss}`;
-}
-function serverLog(msg) { console.log(`[${logTime()}] ${msg}`); }
+  res.json({
+    ok: true,
+    uptime: Math.floor((Date.now() - SERVER_START) / 1000),
+    memory: process.memoryUsage(),
+    rooms: manager.rooms.size,
+    roomBreakdown,
+    totalPlayers,
+    avgTickDuration: manager.avgTickDuration(),
+  });
+});
 
 // --- WebSocket ---
 const RATE_LIMIT = 20; // max messages per second per connection
 const INPUT_RATE_LIMIT = 60; // max input messages per second per connection
 const WS_MAX_PAYLOAD = 4096;
+const MAX_NAME_LEN = 16;
+const MAX_ROOM_LEN = 12;
+const MAX_UPGRADE_CHOICE_LEN = 64;
+const PI = Math.PI;
+
+// Allowlist of accepted client message types — anything else is dropped silently
+const VALID_MSG_TYPES = new Set(Object.values(C));
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: WS_MAX_PAYLOAD });
 
 wss.on('connection', (ws) => {
@@ -60,8 +78,9 @@ wss.on('connection', (ws) => {
     let m;
     try { m = JSON.parse(raw); } catch { return; }
 
-    // --- Input validation: m.t must exist ---
+    // --- Input validation: m.t must exist and be a known type ---
     if (!m.t || typeof m.t !== 'string') return;
+    if (!VALID_MSG_TYPES.has(m.t)) return;
 
     // INPUT — высокочастотный, ограничиваем отдельно от команд UI
     if (m.t === C.INPUT) {
@@ -74,7 +93,12 @@ wss.on('connection', (ws) => {
       if (conn.room && conn.player) {
         m.mx = typeof m.mx === 'number' ? Math.max(-1, Math.min(1, m.mx)) : 0;
         m.mz = typeof m.mz === 'number' ? Math.max(-1, Math.min(1, m.mz)) : 0;
-        m.yaw = typeof m.yaw === 'number' ? m.yaw : 0;
+        if (typeof m.yaw === 'number') {
+          // Normalize to [-PI, PI]
+          m.yaw = ((m.yaw % (2 * PI)) + 3 * PI) % (2 * PI) - PI;
+        } else {
+          m.yaw = 0;
+        }
         m.pitch = typeof m.pitch === 'number' ? Math.max(-1.5, Math.min(1.5, m.pitch)) : 0;
         conn.room.handleInput(conn.player, m);
       }
@@ -89,7 +113,7 @@ wss.on('connection', (ws) => {
     }
     rate.count++;
     if (rate.count > RATE_LIMIT) {
-      serverLog(`Rate limit exceeded, disconnecting`);
+      log.warn(`Rate limit exceeded, disconnecting`);
       try { ws.send(JSON.stringify({ t: S.ERROR, msg: 'Слишком много сообщений' })); } catch {}
       ws.close();
       return;
@@ -108,6 +132,7 @@ wss.on('connection', (ws) => {
 
     if (m.t === C.UPGRADE) {
       if (m.choice !== undefined && typeof m.choice !== 'string') return;
+      if (typeof m.choice === 'string') m.choice = m.choice.slice(0, MAX_UPGRADE_CHOICE_LEN);
     }
 
     switch (m.t) {
@@ -115,18 +140,19 @@ wss.on('connection', (ws) => {
         if (conn.room && conn.player) cleanup(conn);
         if (typeof m.name !== 'string') m.name = '';
         if (typeof m.room !== 'string') m.room = '';
-        m.name = m.name.slice(0, 64);
-        m.room = m.room.slice(0, 12);
-        serverLog(`Player joining: "${m.name}" room="${m.room || ''}"`);
+        m.name = m.name.slice(0, MAX_NAME_LEN);
+        m.room = m.room.slice(0, MAX_ROOM_LEN);
+        log.info(`Player joining: "${m.name}" room="${m.room || ''}"`);
         const res = manager.join(conn, m.name, m.room);
         if (res.error) {
           ws.send(JSON.stringify({ t: S.ERROR, msg: res.error }));
           return;
         }
         const { room, player } = res;
-        serverLog(`Player ${player.name} (${player.id}) joined room ${room.code}`);
+        log.info(`Player ${player.name} (${player.id}) joined room ${room.code}`);
         ws.send(JSON.stringify({
           t: S.JOINED,
+          protocolVersion: PROTOCOL_VERSION,
           id: player.id,
           room: room.code,
           host: room.host,
@@ -137,7 +163,7 @@ wss.on('connection', (ws) => {
       }
       case C.START: {
         if (conn.room && conn.room.host === conn.player?.id) {
-          serverLog(`Game started in room ${conn.room.code}`);
+          log.info(`Game started in room ${conn.room.code}`);
           conn.room.start();
         }
         break;
@@ -152,7 +178,7 @@ wss.on('connection', (ws) => {
         break;
       }
       case C.LEAVE: {
-        serverLog(`Player ${conn.player?.name || '?'} leaving room ${conn.room?.code || '?'}`);
+        log.info(`Player ${conn.player?.name || '?'} leaving room ${conn.room?.code || '?'}`);
         cleanup(conn);
         break;
       }
@@ -168,12 +194,12 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => cleanup(conn));
-  ws.on('error', (err) => { serverLog(`WS error: ${err.message}`); cleanup(conn); });
+  ws.on('error', (err) => { log.warn(`WS error: ${err.message}`); cleanup(conn); });
 });
 
 function cleanup(conn) {
   if (conn.room && conn.player) {
-    serverLog(`Removing player ${conn.player.name} (${conn.player.id}) from room ${conn.room.code}`);
+    log.info(`Removing player ${conn.player.name} (${conn.player.id}) from room ${conn.room.code}`);
     conn.room.removePlayer(conn.player.id);
   }
   conn.room = null;
@@ -194,13 +220,50 @@ function lanIPs() {
 
 server.listen(PORT, '0.0.0.0', () => {
   const ips = lanIPs();
-  console.log('\n  🎮  ARENA COOP — игровой сервер запущен');
-  console.log('  ─────────────────────────────────────────────');
-  console.log(`  Локально:      http://localhost:${PORT}`);
+  log.info('ARENA COOP — игровой сервер запущен');
+  log.info(`Локально:      http://localhost:${PORT}`);
   for (const ip of ips) {
-    console.log(`  По сети (LAN): http://${ip}:${PORT}   ← раздай этот адрес`);
+    log.info(`По сети (LAN): http://${ip}:${PORT}   ← раздай этот адрес`);
   }
-  console.log('  ─────────────────────────────────────────────');
-  console.log(`  WebSocket:     ws://<адрес>:${PORT}/ws`);
-  console.log('  В dev клиент открывается на http://localhost:5173 (или http://<LAN-IP>:5173)\n');
+  log.info(`WebSocket:     ws://<адрес>:${PORT}/ws`);
+  log.info('В dev клиент открывается на http://localhost:5173 (или http://<LAN-IP>:5173)');
 });
+
+// --- Graceful Shutdown ---
+let isShuttingDown = false;
+
+function shutdown(signal) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  log.info(`Received ${signal}, shutting down gracefully...`);
+
+  // 1. Stop accepting new connections
+  server.close(() => {
+    log.info('HTTP server closed.');
+  });
+
+  // 2. Close all WebSocket connections
+  for (const ws of wss.clients) {
+    try {
+      ws.close(1001, 'Server shutting down');
+    } catch {}
+  }
+  wss.close(() => {
+    log.info('WebSocket server closed.');
+  });
+
+  // 3. Clear room intervals
+  if (typeof manager.destroy === 'function') {
+    manager.destroy();
+    log.info('RoomManager destroyed.');
+  }
+
+  // 4. Exit after a short grace period
+  setTimeout(() => {
+    log.info('Goodbye.');
+    process.exit(0);
+  }, 1000);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

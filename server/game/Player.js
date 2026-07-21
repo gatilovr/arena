@@ -448,7 +448,11 @@ export class Player {
 
   _pickUpgradeOptions(count) {
     const available = UPGRADES.filter(u => !this.upgradeHistory.includes(u.id) || this.upgradeHistory.filter(id => id === u.id).length < 3);
-    const shuffled = [...available].sort(() => Math.random() - 0.5);
+    const shuffled = [...available];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
     return shuffled.slice(0, Math.min(count, shuffled.length));
   }
 

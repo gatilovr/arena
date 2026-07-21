@@ -131,7 +131,7 @@ const ENEMY_COLORS = {
   assassin: 0x1a1a2e, berserker: 0x8b0000, summoner: 0x4a0080, shielder: 0x2f5080,
   sprinter: 0x00cc44, phantom: 0x6633aa, golem: 0x555555, firestarter: 0xff4400,
   frost_mage: 0x4488ff, cursed: 0x8844aa,
-  butcher: 0x7a1d1d, necro: 0x2a1140,
+  rebradd: 0xccccaa, necro: 0x2a1140,
   golemKing: 0x555555, firelord: 0xff3300, shadowKing: 0x1a0a2e,
   frostQueen: 0x4488ff, dragonLord: 0xcc2200
 };
@@ -336,16 +336,33 @@ export function makeEnemy(type, isBoss) {
 
   // --- БОССЫ ---
 
-  } else if (type === 'butcher') {
-    box(0.5, 0.9, 0.5, -0.42, 0.45, 0, dark);
-    box(0.5, 0.9, 0.5, 0.42, 0.45, 0, dark);
-    box(1.6, 1.4, 0.95, 0, 1.55, 0, mat);
-    box(0.62, 0.55, 0.6, 0, 2.55, 0, mat);
-    addEye(0xff3300, -0.15, 2.6, 0.31, 0.04);
-    addEye(0xff3300, 0.15, 2.6, 0.31, 0.04);
-    box(0.48, 1.35, 0.48, -1.1, 1.5, 0, mat);
-    box(0.48, 1.35, 0.48, 1.1, 1.5, 0, mat);
-    height = 3.1;
+  } else if (type === 'rebradd') {
+    // Lord Rebradd — bone skeleton with axes
+    const boneMat = new THREE.MeshStandardMaterial({ color: 0xccccaa, roughness: 0.7, emissive: 0x888866, emissiveIntensity: 0.15 });
+    // Ribcage
+    box(1.4, 1.2, 0.8, 0, 1.4, 0, boneMat);
+    box(0.15, 0.15, 0.9, 0, 1.7, 0, boneMat);
+    box(0.15, 0.15, 0.9, 0, 1.4, 0, boneMat);
+    box(0.15, 0.15, 0.9, 0, 1.1, 0, boneMat);
+    // Head (skull)
+    box(0.55, 0.6, 0.55, 0, 2.35, 0, boneMat);
+    addEye(0x4488ff, -0.13, 2.4, 0.28, 0.06);
+    addEye(0x4488ff, 0.13, 2.4, 0.28, 0.06);
+    // Jaw
+    box(0.45, 0.18, 0.35, 0, 2.05, 0.1, boneMat);
+    // Arms (bone)
+    box(0.25, 1.1, 0.25, -1.0, 1.3, 0, boneMat);
+    box(0.25, 1.1, 0.25, 1.0, 1.3, 0, boneMat);
+    // Axes (large frost axes)
+    const axeMat = new THREE.MeshStandardMaterial({ color: 0x6688aa, roughness: 0.5, emissive: 0x4466aa, emissiveIntensity: 0.3 });
+    box(0.15, 0.8, 0.15, -1.2, 2.1, 0, boneMat);
+    box(0.15, 0.8, 0.15, 1.2, 2.1, 0, boneMat);
+    box(0.6, 0.5, 0.12, -1.2, 2.5, 0, axeMat);
+    box(0.6, 0.5, 0.12, 1.2, 2.5, 0, axeMat);
+    // Legs (bone)
+    box(0.22, 0.9, 0.22, -0.35, 0.45, 0, boneMat);
+    box(0.22, 0.9, 0.22, 0.35, 0.45, 0, boneMat);
+    height = 3.0;
 
   } else if (type === 'necro') {
     const robe = new THREE.Mesh(new THREE.ConeGeometry(1.15, 2.6, 10), mat);

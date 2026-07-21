@@ -18,7 +18,7 @@ import { sfx } from '../audio/AudioSys.js';
 import { S, C } from '../../../shared/protocol.js';
 
 const STREAKS = { 2: 'ДВОЙНОЕ УБИЙСТВО!', 3: 'ТРОЙНОЕ УБИЙСТВО!', 4: 'УЛЬТРА-СЕРИЯ!', 5: 'РЕЗНЯ!', 7: 'БЕЗУМИЕ!' };
-const BLOOD = { normal: 0x8a0f0f, runner: 0x147a36, tank: 0x6d3fb8, shooter: 0x2f7fd6, exploder: 0xffa028, butcher: 0x8a0f0f, necro: 0x7722cc, minion: 0x773388 };
+const BLOOD = { normal: 0x8a0f0f, runner: 0x147a36, tank: 0x6d3fb8, shooter: 0x2f7fd6, exploder: 0xffa028, rebradd: 0xccccaa, necro: 0x7722cc, minion: 0x773388 };
 const DROP_COLORS = { item: 0xffc233, buff: 0x3dff6a, tome: 0x35e0ff, coin: 0xffc233 };
 
 // ============================================================================
@@ -311,7 +311,7 @@ export class Game {
         ev = new EnemyView(this.scene.scene, this.scene.camera, e);
         this.enemies.set(e.id, ev);
         // portal spawn effect — color matches enemy type
-        const ENEMY_COL = { normal: 0x9c2626, runner: 0x1fae4e, tank: 0x6d3fb8, shooter: 0x2f7fd6, exploder: 0xd67f1f, butcher: 0xff2d3f, necro: 0xb44dff };
+        const ENEMY_COL = { normal: 0x9c2626, runner: 0x1fae4e, tank: 0x6d3fb8, shooter: 0x2f7fd6, exploder: 0xd67f1f, rebradd: 0xccccaa, necro: 0xb44dff };
         this.effects.portal(e.x, e.z, ENEMY_COL[e.t] || 0x9c2626);
       }
       ev.pushSnap(e);
@@ -405,7 +405,7 @@ export class Game {
         break;
       }
       case 'wave': {
-        if (ev.boss) { this.hud.banner('⚠ БОСС ⚠', ev.bossType === 'necro' ? 'НЕКРОМАНТ' : 'МЯСНИК', true); sfx.wave(); this.shake = 0.3; }
+        if (ev.boss) { this.hud.banner('⚠ БОСС ⚠', ev.bossType === 'necro' ? 'НЕКРОМАНТ' : 'LORD REBRADD', true); sfx.wave(); this.shake = 0.3; }
         else this.hud.banner('ВОЛНА ' + ev.num, 'приготовься');
         break;
       }

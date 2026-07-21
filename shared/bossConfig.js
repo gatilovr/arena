@@ -6,83 +6,63 @@
 
 export const BOSS_ABILITIES = {
   // ========================================================================
-  // МЯСНИК — melee boss: slam, charge, hook, cleave combos, blood rage
+  // LORD REBRADD — bone skeleton boss: coldflame, bone storm, melee cleave
+  // Inspired by Lord Marrowgar from WoW WotLK
   // ========================================================================
-  butcher: {
+  rebradd: {
     minionType: 'normal',
     announcements: {
-      2: { text: 'МЯСНИК ЯРОСТЕН!', color: '#ff2d3f' },
-      3: { text: 'БЕЗУМИЕ!', color: '#ff0000' },
-      4: { text: 'КРОВАВАЯ ЖАТВА!', color: '#880000' }
+      1: { text: 'LORD REBRADD ПРОБУЖДАЕТСЯ!', color: '#88ccff' },
     },
     abilities: [
       {
-        id: 'slam',
-        baseCd: 3.5,
-        cdByPhase: { 3: 2, 4: 1.5 },
-        dmgMul: 1.4,
-        radius: 4,
-        knockback: 8,
-        minPhase: 1,
-        teleColor: 0xff2d3f,
-        hitColor: 0xff2d3f,
-        wavesByPhase: { 1: 1, 2: 2, 3: 3 }
-      },
-      {
-        id: 'charge',
-        baseCd: 6,
-        cdByPhase: { 3: 3.5, 4: 2.5 },
-        dmgMul: 1.3,
-        aoeDmgMul: 0.4,
-        aoeRadius: 3,
-        stunDur: 0.8,
-        speed: 28,
-        hitRadius: 2.5,
-        minPhase: 1,
-        teleColor: 0xff4444,
-        hitColor: 0xff4444,
-        wallStunDur: 0.5,
-        wallHitColor: 0xffaa00
-      },
-      {
-        id: 'hook',
+        id: 'coldflame4',
         baseCd: 8,
-        cdByPhase: { 4: 4 },
-        dmgMul: 0.5,
-        pullFactor: 0.8,
-        teleRadius: 1.5,
+        dmgMul: 0.8,
+        duration: 3,
+        speed: 8,
+        width: 1.5,
+        color: 0x4488ff,
+        teleDur: 0.6,
+        teleColor: 0x2266cc
+      },
+      {
+        id: 'coldflame1',
+        baseCd: 5,
+        dmgMul: 1.0,
+        duration: 2.5,
+        speed: 10,
+        width: 2.0,
+        range: 18,
+        color: 0x4488ff,
         teleDur: 0.5,
-        minPhase: 2,
-        color: 0xff4444
+        teleColor: 0x2266cc
       },
       {
-        id: 'cleave',
-        baseCd: 4,
-        cdByPhase: { 3: 2.5 },
-        dmgMuls: [1.0, 1.2, 1.8],
-        ranges: [3.5, 4.0, 5.0],
-        maxCombosByPhase: { 1: 2, 2: 3, 4: 4 },
-        comboDelay: 0.35,
-        minPhase: 1,
-        color: 0xff2d3f
+        id: 'boneStorm',
+        baseCd: 18,
+        dmgMul: 0.6,
+        hitInterval: 0.5,
+        pullRadius: 6,
+        pullForce: 12,
+        spinDuration: [7, 12],
+        jumpCount: [2, 3],
+        jumpDelay: 2.5,
+        moveSpeed: 10,
+        color: 0xccccaa,
+        teleDur: 1.0,
+        teleColor: 0xaaaacc
       },
       {
-        id: 'minionSpawn',
-        baseCd: 10,
-        cdByPhase: { 3: 6, 4: 4 },
-        countsByPhase: { 1: 2, 3: 3, 4: 4 },
-        minPhase: 1
-      },
-      {
-        id: 'bloodRage',
-        baseCd: 15,
-        duration: 5,
-        dmgMul: 1.5,
-        minPhase: 3,
-        text: 'КРОВАВАЯ ЯРОСТЬ!',
-        textColor: '#ff0000',
-        novaRadius: 3,
-        novaColor: 0xff0000
+        id: 'meleeCleave',
+        baseCd: 2,
+        dmgMul: 1.2,
+        coneAngle: 0.7,
+        range: 4.5,
+        knockback: 6,
+        color: 0xff4444,
+        teleDur: 0.4,
+        teleColor: 0xcc2222
       }
     ]
   },

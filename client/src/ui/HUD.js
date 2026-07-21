@@ -179,7 +179,7 @@ export class HUD {
     const el = document.getElementById('boss-bar');
     if (!boss) { el.classList.add('hidden'); return; }
     el.classList.remove('hidden');
-    this._txt('boss-name', (boss.type === 'necro' ? 'НЕКРОМАНТ' : 'МЯСНИК') + ' ⚠');
+    this._txt('boss-name', (boss.type === 'necro' ? 'НЕКРОМАНТ' : 'LORD REBRADD') + ' ⚠');
     this._w('boss-fill', Math.max(0, Math.min(100, boss.hp / boss.mhp * 100)));
   }
 

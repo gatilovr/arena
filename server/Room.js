@@ -263,6 +263,7 @@ export class Room {
       this.skills.update(dt);
       this.loot.update(dt);
       this.wave.update(dt);
+      this._updateZones(dt);
 
       // призванные прислужники
       this._updateMinions(dt);
@@ -415,6 +416,25 @@ export class Room {
       }
       m.x = Math.max(-44, Math.min(44, m.x));
       m.z = Math.max(-44, Math.min(44, m.z));
+    }
+  }
+
+  _updateZones(dt) {
+    for (let i = this.zones.length - 1; i >= 0; i--) {
+      const z = this.zones[i];
+      z.timer -= dt;
+      if (z.timer > 0) continue;
+      z.life -= dt;
+      if (z.life <= 0) { this.zones.splice(i, 1); continue; }
+      // Damage players in zone
+      for (const p of this.playersArr()) {
+        if (!p.alive) continue;
+        const d = Math.hypot(p.x - z.x, p.z - z.z);
+        if (d < z.r + 0.5) {
+          p.takeDamage(z.dmg * dt * 2, this);
+          if (z.slowT) { p.enemySlowT = z.slowT; p.enemySlowF = z.slowF || 0.6; }
+        }
+      }
     }
   }
 

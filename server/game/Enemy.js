@@ -249,6 +249,10 @@ export class Enemy {
             case 'darkness': this.skDarknessCd = cd; break;
             case 'soulRip': this.skSoulRipCd = cd; break;
             case 'shadowStep': this.skShadowStepCd = cd; break;
+            case 'coldflame4': this.rebraddCf4Cd = cd; break;
+            case 'coldflame1': this.rebraddCf1Cd = cd; break;
+            case 'boneStorm': this.rebraddBsCd = cd; break;
+            case 'meleeCleave': this.rebraddMcCd = cd; break;
           }
         }
         if (bossCfg.shieldHp) {
@@ -797,7 +801,7 @@ export class Enemy {
 
     // Route to boss AI
     switch (this.type) {
-      case 'butcher': this._butcherAI(dt, room, target, dist, dirX, dirZ, sf, em); break;
+      case 'rebradd': this._rebraddAI(dt, room, target, dist, dirX, dirZ, sf, em); break;
       case 'necro': this._necroAI(dt, room, target, dist, dirX, dirZ, sf, em); break;
       case 'golemKing': this._golemKingAI(dt, room, target, dist, dirX, dirZ, sf, em); break;
       case 'firelord': this._firelordAI(dt, room, target, dist, dirX, dirZ, sf, em); break;
@@ -830,200 +834,282 @@ export class Enemy {
   }
 
   // ========================================================================
-  // МЯСНИК: ближний бой, крюк, комбо-удары, заряд, кровавая ярость
+  // LORD REBRADD — bone skeleton boss: coldflame, bone storm, melee cleave
+  // Priority-based adaptive AI, works with 1-4 players
   // ========================================================================
-  _butcherAI(dt, room, target, dist, dirX, dirZ, sf, em) {
-    const cfg = BOSS_ABILITIES.butcher;
-    const slamCfg = cfg.abilities.find(a => a.id === 'slam');
-    const chargeCfg = cfg.abilities.find(a => a.id === 'charge');
-    const hookCfg = cfg.abilities.find(a => a.id === 'hook');
-    const cleaveCfg = cfg.abilities.find(a => a.id === 'cleave');
-    const rageCfg = cfg.abilities.find(a => a.id === 'bloodRage');
-    const minionCfg = cfg.abilities.find(a => a.id === 'minionSpawn');
+  _rebraddAI(dt, room, target, dist, dirX, dirZ, sf, em) {
+    const cfg = BOSS_ABILITIES.rebradd;
+    const cf4Cfg = cfg.abilities.find(a => a.id === 'coldflame4');
+    const cf1Cfg = cfg.abilities.find(a => a.id === 'coldflame1');
+    const bsCfg = cfg.abilities.find(a => a.id === 'boneStorm');
+    const mcCfg = cfg.abilities.find(a => a.id === 'meleeCleave');
 
-    this.bossStateT -= dt;
-    this.slamCd -= dt;
-    this.chargeCd -= dt;
-    this.minionCd -= dt;
-    this.hookCd -= dt;
-    this.cleaveCd -= dt;
-    this.bloodRageCd -= dt;
+    // Cooldowns
+    this.rebraddCf4Cd -= dt;
+    this.rebraddCf1Cd -= dt;
+    this.rebraddBsCd -= dt;
+    this.rebraddMcCd -= dt;
 
-    // Кровавая ярость (фаза 3+): бафф урона на 5с
-    if (this.bloodRageT > 0) {
-      this.bloodRageT -= dt;
+    // Bone Storm active
+    if (this.bossState === 'boneStorm') {
+      this._updateBoneStorm(dt, room, bsCfg, em);
+      this.y = 0.3 + Math.sin(room.time * 15) * 0.15;
+      return;
     }
-    const rageDmgMul = this.bloodRageT > 0 ? rageCfg.dmgMul : 1;
 
+    // Bone Storm cooldown ready check
+    if (this.rebraddBsCd <= 0 && this.bossState === 'idle') {
+      // Find best cluster for bone storm
+      const cluster = this._findBestCluster(room);
+      if (cluster) {
+        this.bossState = 'boneStormTele';
+        this.bossStateT = bsCfg.teleDur;
+        this._bsTargetX = cluster.x;
+        this._bsTargetZ = cluster.z;
+        this._bsJumpsLeft = this._randInt(bsCfg.jumpCount[0], bsCfg.jumpCount[1]);
+        this._bsDuration = this._randFloat(bsCfg.spinDuration[0], bsCfg.spinDuration[1]);
+        this._bsHitTimer = 0;
+        this.rebraddBsCd = bsCfg.baseCd;
+        room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: 3, dur: bsCfg.teleDur, color: bsCfg.teleColor });
+        room.sendEvent({ type: 'ann', text: 'BONE STORM!', color: '#88ccff' });
+        return;
+      }
+    }
+
+    // Melee Cleave
+    if (this.rebraddMcCd <= 0 && dist < mcCfg.range && this.bossState === 'idle') {
+      this.bossState = 'cleaveTele';
+      this.bossStateT = mcCfg.teleDur;
+      this.rebraddMcCd = mcCfg.baseCd;
+      room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x + dirX * 2, z: this.z + dirZ * 2, r: 1.5, dur: mcCfg.teleDur, color: mcCfg.teleColor });
+      return;
+    }
+
+    // Coldflame 1 direction (if player far)
+    if (this.rebraddCf1Cd <= 0 && dist > 6 && this.bossState === 'idle') {
+      this.bossState = 'cf1Tele';
+      this.bossStateT = cf1Cfg.teleDur;
+      this._cf1DirX = dirX;
+      this._cf1DirZ = dirZ;
+      this.rebraddCf1Cd = cf1Cfg.baseCd;
+      room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x + dirX * 3, z: this.z + dirZ * 3, r: 1, dur: cf1Cfg.teleDur, color: cf1Cfg.teleColor });
+      return;
+    }
+
+    // Coldflame 4 directions (if players spread around)
+    if (this.rebraddCf4Cd <= 0 && this.bossState === 'idle') {
+      const players = room.playersArr().filter(p => p.alive);
+      if (players.length >= 1) {
+        this.bossState = 'cf4Tele';
+        this.bossStateT = cf4Cfg.teleDur;
+        this.rebraddCf4Cd = cf4Cfg.baseCd;
+        // Find 4 directions covering most players
+        this._cf4Dirs = this._findBest4Dirs(players);
+        room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: 2, dur: cf4Cfg.teleDur, color: cf4Cfg.teleColor });
+        return;
+      }
+    }
+
+    // Idle movement — chase target
+    if (this.bossState === 'idle' && dist > 2.5) {
+      const chaseSpeed = this.speed * sf * em * (this._kitingScore > 0.5 ? 1.3 : 1);
+      const strafeAmt = this._strafeDir * this.speed * 0.3 * sf;
+      this.x += (dirX * chaseSpeed - dirZ * strafeAmt) * dt;
+      this.z += (dirZ * chaseSpeed + dirX * strafeAmt) * dt;
+    }
+
+    // State machine transitions
     switch (this.bossState) {
-      case 'idle': {
-        // Адаптивное движение: если кайтят — агрессивнее
-        const chaseSpeed = this.speed * sf * em * (this._kitingScore > 0.5 ? 1.3 : 1);
-        if (dist > 2.5) {
-          // Strafe while approaching
-          const strafeAmt = this._strafeDir * this.speed * 0.3 * sf;
-          this.x += (dirX * chaseSpeed - dirZ * strafeAmt) * dt;
-          this.z += (dirZ * chaseSpeed + dirX * strafeAmt) * dt;
-        }
-
-        // Priority-based ability selection
-        // 1. Hook if player is far (gap closer)
-        if (dist > 8 && this.hookCd <= 0 && this.phase >= hookCfg.minPhase) {
-          this.bossState = 'hookTele';
-          this.bossStateT = 0.5;
-          this.hookCd = getAbilityCd(hookCfg, this.phase);
-          room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: target.x, z: target.z, r: hookCfg.teleRadius, dur: hookCfg.teleDur, color: hookCfg.color });
-        }
-        // 2. Charge if mid-range
-        else if (dist > 5 && this.chargeCd <= 0) {
-          this.bossState = 'chargeTele';
-          this.bossStateT = 0.6;
-          this.chargeDirX = dirX; this.chargeDirZ = dirZ;
-          this.chargeHit = false;
-          this.chargeCd = getAbilityCd(chargeCfg, this.phase);
-          room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: 2, dur: 0.6, color: chargeCfg.teleColor });
-        }
-        // 3. Cleave combo if in melee
-        else if (dist < 4 && this.cleaveCd <= 0) {
-          this.bossState = 'cleaveCombo';
-          this.bossStateT = 0.3;
-          this.cleaveCombo = 0;
-          this.cleaveCd = getAbilityCd(cleaveCfg, this.phase);
-        }
-        // 4. Slam if in range
-        else if (dist < 5 && this.slamCd <= 0) {
-          this.bossState = 'slamTele';
-          this.bossStateT = 0.6;
-          this.slamWavesLeft = slamCfg.wavesByPhase[this.phase] || slamCfg.wavesByPhase[1];
-          this.slamCd = getAbilityCd(slamCfg, this.phase);
-          room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: slamCfg.radius, dur: 0.6, color: slamCfg.teleColor });
-        }
-
-        // Blood rage (phase 3+)
-        if (this.phase >= rageCfg.minPhase && this.bloodRageCd <= 0 && this.bloodRageT <= 0) {
-          this.bloodRageT = rageCfg.duration;
-          this.bloodRageCd = rageCfg.baseCd;
-          room.sendEvent({ type: 'ann', text: rageCfg.text, color: rageCfg.textColor });
-          room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: rageCfg.novaRadius, color: rageCfg.novaColor });
-        }
-
-        // Spawn minions
-        if (this.minionCd <= 0) {
-          const minionCount = minionCfg.countsByPhase[this.phase] || minionCfg.countsByPhase[1];
-          this._spawnMinions(room, minionCount);
-          this.minionCd = getAbilityCd(minionCfg, this.phase);
-        }
-        break;
-      }
-      case 'hookTele': {
+      case 'boneStormTele': {
         if (this.bossStateT <= 0) {
-          // Pull target toward boss
-          const pullDist = Math.max(0, dist - 3);
-          target.x -= dirX * pullDist * hookCfg.pullFactor;
-          target.z -= dirZ * pullDist * hookCfg.pullFactor;
-          target.takeDamage(this.dmg * hookCfg.dmgMul * em, room);
-          room.sendEvent({ type: 'skillfx', kind: 'beam', x: this.x, y: 1.5, z: this.z, x2: target.x, y2: 1.2, z2: target.z, color: hookCfg.color });
-          room.sendEvent({ type: 'skillfx', kind: 'text', text: 'HOOK!', x: target.x, y: 2.5, z: target.z, color: hookCfg.color });
-          this.bossState = 'idle';
-          // Combo into cleave
-          this._comboChain = 1;
-          this._comboTimer = 1.5;
+          // Jump to target position
+          this.x = this._bsTargetX;
+          this.z = this._bsTargetZ;
+          this.bossState = 'boneStorm';
+          this._bsSpinTimer = 0;
+          this._bsTotalTime = 0;
         }
         break;
       }
-      case 'cleaveCombo': {
+      case 'cf1Tele': {
         if (this.bossStateT <= 0) {
-          this.cleaveCombo++;
-          const comboIdx = Math.min(this.cleaveCombo - 1, cleaveCfg.dmgMuls.length - 1);
-          const comboDmg = cleaveCfg.dmgMuls[comboIdx] * rageDmgMul * em;
-          const comboRange = cleaveCfg.ranges[comboIdx];
-          for (const p of room.playersArr()) {
-            if (!p.alive) continue;
-            if (Math.hypot(p.x - this.x, p.z - this.z) < comboRange) {
-              p.takeDamage(this.dmg * comboDmg, room);
-            }
-          }
-          room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: comboRange, color: cleaveCfg.color });
-
-          const maxCombo = cleaveCfg.maxCombosByPhase[this.phase] || cleaveCfg.maxCombosByPhase[1];
-          if (this.cleaveCombo < maxCombo) {
-            this.bossStateT = cleaveCfg.comboDelay;
-          } else {
-            this.bossState = 'idle';
-          }
-        }
-        break;
-      }
-      case 'slamTele': {
-        if (this.bossStateT <= 0) {
-          this.slamWavesLeft--;
-          this.bossState = 'slamHit';
-          this.bossStateT = 0.12;
-          for (const p of room.playersArr()) {
-            if (!p.alive) continue;
-            if (Math.hypot(p.x - this.x, p.z - this.z) < slamCfg.radius) {
-              p.takeDamage(this.dmg * slamCfg.dmgMul * em * rageDmgMul, room);
-              const kdx = p.x - this.x, kdz = p.z - this.z;
-              const kd = Math.hypot(kdx, kdz) || 1;
-              p.vx += (kdx / kd) * slamCfg.knockback; p.vz += (kdz / kd) * slamCfg.knockback;
-            }
-          }
-          room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: slamCfg.radius, color: slamCfg.hitColor });
-        }
-        break;
-      }
-      case 'slamHit': {
-        if (this.bossStateT <= 0) {
-          if (this.slamWavesLeft > 0) {
-            this.bossState = 'slamTele';
-            this.bossStateT = 0.4;
-            room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: slamCfg.radius + 0.5, dur: 0.4, color: 0xff0000 });
-          } else {
-            this.bossState = 'idle';
-          }
-        }
-        break;
-      }
-      case 'chargeTele': {
-        if (this.bossStateT <= 0) {
-          this.bossState = 'charging';
-          this.bossStateT = 0.5;
-        }
-        break;
-      }
-      case 'charging': {
-        this.x += this.chargeDirX * chargeCfg.speed * em * dt;
-        this.z += this.chargeDirZ * chargeCfg.speed * em * dt;
-        for (const p of room.playersArr()) {
-          if (!p.alive) continue;
-          if (Math.hypot(p.x - this.x, p.z - this.z) < chargeCfg.hitRadius && !this.chargeHit) {
-            this.chargeHit = true;
-            p.takeDamage(this.dmg * chargeCfg.dmgMul * em * rageDmgMul, room);
-            p.stunT = chargeCfg.stunDur;
-            room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: chargeCfg.hitRadius, color: chargeCfg.hitColor });
-          }
-        }
-        if (this.phase >= 3) {
-          for (const p of room.playersArr()) {
-            if (!p.alive) continue;
-            if (Math.hypot(p.x - this.x, p.z - this.z) < chargeCfg.aoeRadius) p.takeDamage(this.dmg * chargeCfg.aoeDmgMul * em, room);
-          }
-        }
-        if (Math.abs(this.x) > ARENA.LIMIT - 2 || Math.abs(this.z) > ARENA.LIMIT - 2) {
-          this.bossState = 'stun'; this.bossStateT = chargeCfg.wallStunDur;
-          room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: chargeCfg.hitRadius + 0.5, color: chargeCfg.wallHitColor });
-        } else if (this.bossStateT <= 0) {
+          // Spawn coldflame line
+          this._spawnColdflameLine(room, this.x, this.z, this._cf1DirX, this._cf1DirZ, cf1Cfg);
           this.bossState = 'idle';
         }
         break;
       }
-      case 'stun': {
-        if (this.bossStateT <= 0) this.bossState = 'idle';
+      case 'cf4Tele': {
+        if (this.bossStateT <= 0) {
+          // Spawn 4 coldflame lines
+          for (const dir of this._cf4Dirs) {
+            this._spawnColdflameLine(room, this.x, this.z, dir.x, dir.z, cf4Cfg);
+          }
+          this.bossState = 'idle';
+        }
+        break;
+      }
+      case 'cleaveTele': {
+        if (this.bossStateT <= 0) {
+          // Execute cleave
+          for (const p of room.playersArr()) {
+            if (!p.alive) continue;
+            const pd = Math.hypot(p.x - this.x, p.z - this.z);
+            if (pd > mcCfg.range) continue;
+            const dot = (p.x - this.x) * dirX + (p.z - this.z) * dirZ;
+            if (dot < 0) continue; // behind boss
+            const angle = Math.acos(dot / (pd || 1));
+            if (angle < mcCfg.coneAngle) {
+              p.takeDamage(this.dmg * mcCfg.dmgMul * em, room);
+              // Knockback
+              const kx = p.x - this.x, kz = p.z - this.z;
+              const kd = Math.hypot(kx, kz) || 1;
+              p.vx += (kx / kd) * mcCfg.knockback;
+              p.vz += (kz / kd) * mcCfg.knockback;
+            }
+          }
+          room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x + dirX * 2, z: this.z + dirZ * 2, radius: 2, color: mcCfg.color });
+          this.bossState = 'idle';
+        }
         break;
       }
     }
+
     this.y = Math.abs(Math.sin(room.time * 5)) * 0.08;
   }
+
+  _updateBoneStorm(dt, room, bsCfg, em) {
+    this._bsTotalTime += dt;
+    this._bsSpinTimer += dt;
+
+    // Deal damage to nearby players every hitInterval
+    if (this._bsSpinTimer >= bsCfg.hitInterval) {
+      this._bsSpinTimer -= bsCfg.hitInterval;
+      for (const p of room.playersArr()) {
+        if (!p.alive) continue;
+        const pd = Math.hypot(p.x - this.x, p.z - this.z);
+        if (pd < bsCfg.pullRadius) {
+          p.takeDamage(this.dmg * bsCfg.dmgMul * em, room);
+          // Pull toward boss
+          const px = this.x - p.x, pz = this.z - p.z;
+          const pDist = Math.hypot(px, pz) || 1;
+          p.vx += (px / pDist) * bsCfg.pullForce * dt;
+          p.vz += (pz / pDist) * bsCfg.pullForce * dt;
+        }
+      }
+      room.sendEvent({ type: 'skillfx', kind: 'nova', x: this.x, z: this.z, radius: 2, color: bsCfg.color });
+    }
+
+    // Move toward current target
+    if (this._bsTargetX !== undefined) {
+      const dx = this._bsTargetX - this.x;
+      const dz = this._bsTargetZ - this.z;
+      const d = Math.hypot(dx, dz);
+      if (d > 1) {
+        this.x += (dx / d) * bsCfg.moveSpeed * em * dt;
+        this.z += (dz / d) * bsCfg.moveSpeed * em * dt;
+      }
+    }
+
+    // Jump to new position after jumpDelay
+    if (this._bsTotalTime > 0 && this._bsJumpsLeft > 0 && Math.floor(this._bsTotalTime / bsCfg.jumpDelay) >= (this._bsJumpsLeft - this._bsJumpsLeft + 1)) {
+      // Find next best cluster
+      const cluster = this._findBestCluster(room);
+      if (cluster) {
+        this._bsTargetX = cluster.x;
+        this._bsTargetZ = cluster.z;
+        this._bsJumpsLeft--;
+      }
+    }
+
+    // End bone storm
+    if (this._bsTotalTime >= this._bsDuration) {
+      this.bossState = 'idle';
+      this._bsTargetX = undefined;
+      this._bsTargetZ = undefined;
+    }
+  }
+
+  _findBestCluster(room) {
+    const players = room.playersArr().filter(p => p.alive);
+    if (!players.length) return null;
+
+    // For single player, target their position
+    if (players.length === 1) {
+      const p = players[0];
+      const a = Math.random() * Math.PI * 2;
+      return { x: p.x + Math.cos(a) * 2, z: p.z + Math.sin(a) * 2 };
+    }
+
+    // For multiple players, find densest cluster
+    let best = null, bestScore = -1;
+    for (const p of players) {
+      let score = 0;
+      for (const other of players) {
+        if (other === p) continue;
+        const d = Math.hypot(p.x - other.x, p.z - other.z);
+        if (d < 6) score += 1 - d / 6;
+      }
+      if (score > bestScore) { bestScore = score; best = { x: p.x, z: p.z }; }
+    }
+    return best;
+  }
+
+  _findBest4Dirs(players) {
+    // Find 4 directions (0°, 90°, 180°, 270°) that cover most players
+    const angles = [0, Math.PI / 2, Math.PI, Math.PI * 1.5];
+    let bestRotation = 0;
+    let bestCover = 0;
+
+    for (let rot = 0; rot < 4; rot++) {
+      let cover = 0;
+      const baseAngle = (rot * Math.PI) / 2;
+      for (const p of players) {
+        const a = Math.atan2(p.x - this.x, p.z - this.z);
+        for (const dir of angles) {
+          const diff = Math.abs(((a - baseAngle - dir + Math.PI) % (Math.PI * 2)) - Math.PI);
+          if (diff < 0.5) { cover++; break; }
+        }
+      }
+      if (cover > bestCover) { bestCover = cover; bestRotation = baseAngle; }
+    }
+
+    return angles.map(a => ({
+      x: Math.sin(bestRotation + a),
+      z: Math.cos(bestRotation + a)
+    }));
+  }
+
+  _spawnColdflameLine(room, startX, startZ, dirX, dirZ, cfg) {
+    const segments = 6;
+    const segLen = cfg.range || 15;
+    for (let i = 0; i < segments; i++) {
+      const t = i * 0.3;
+      const x = startX + dirX * segLen * (i / segments);
+      const z = startZ + dirZ * segLen * (i / segments);
+      // Damage zone that persists
+      room.zones.push({
+        id: 'cf' + (++room._fbId),
+        x, z,
+        r: cfg.width,
+        dmg: this.dmg * cfg.dmgMul,
+        life: cfg.duration,
+        timer: t,
+        color: cfg.color,
+        owner: this,
+        slowF: 0.6,
+        slowT: 1.5,
+      });
+    }
+    room.sendEvent({ type: 'skillfx', kind: 'beam',
+      x: startX, y: 0.5, z: startZ,
+      x2: startX + dirX * segLen, y2: 0.5, z2: startZ + dirZ * segLen,
+      color: cfg.color
+    });
+  }
+
+  _randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+  _randFloat(min, max) { return Math.random() * (max - min) + min; }
 
   // ========================================================================
   // НЕКРОМАНТ: дальний бой, спираль, телепорт, ритуал, drain, nova, curse

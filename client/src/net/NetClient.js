@@ -37,10 +37,9 @@ export class NetClient {
     this.ws.onmessage = (ev) => {
       let m;
       try { m = JSON.parse(ev.data); } catch { return; }
-      // Ping/pong handling: server may echo timestamp in `t` field (overwriting type)
-      // or send as `{ t: 'pong' }`. Detect pong by type string OR numeric timestamp.
-      if (m.t === 'pong' || (typeof m.t === 'number' && this._lastPingSent)) {
-        this.ping = Date.now() - this._lastPingSent;
+      if (m.t === 'pong') {
+        const sentAt = typeof m.t0 === 'number' ? m.t0 : this._lastPingSent;
+        if (sentAt) this.ping = Math.max(0, Date.now() - sentAt);
         return;
       }
       const set = this.handlers.get(m.t);

@@ -144,13 +144,13 @@ export class Room {
         break;
       }
       case 'assign': {
-        player.assignSkill(m.slot, m.skillId);
-        this._broadcastPlayerState(player);
+        const ok = player.assignSkill(m.slot, m.skillId);
+        if (ok) this._broadcastPlayerState(player);
         break;
       }
       case 'unassign': {
-        player.unassignSkill(m.slot);
-        this._broadcastPlayerState(player);
+        const ok = player.unassignSkill(m.slot);
+        if (ok) this._broadcastPlayerState(player);
         break;
       }
       case 'upgrade': {
@@ -265,7 +265,7 @@ export class Room {
       id: 'b' + (++this._fbId),
       x, y, z,
       vx: dx / d * speed, vy: dy / d * speed, vz: dz / d * speed,
-      dmg, r: 0.16, life: 4, c: color
+      dmg, r: 0.16, life: 4, c: color, side: 'enemy'
     });
   }
 

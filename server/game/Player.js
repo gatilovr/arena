@@ -72,6 +72,7 @@ export class Player {
     this.enemySlowT = 0; this.enemySlowF = 1;    // замедление от врагов
     this.damageAmpT = 0; this.damageAmpF = 1;    // усиление урона (получаемый урон)
     this.enemyBurnT = 0; this.enemyBurnDps = 0;  // горение от врагов
+    this.stunT = 0;                              // оглушение от боссов/мобов
 
     // статы (пересчитываются при смене экипировки/бафов)
     this.stats = this._computeStats();
@@ -99,7 +100,7 @@ export class Player {
     let wDmg = 1, wSpd = 1, wRange = 1, el = 'none', exec = false, wVamp = 0, wCrit = 0, wHP = 0;
     let weaponType = 'melee', atkRange = PLAYER.ATTACK_RANGE;
     let eqSpd = 0, eqCrit = 0, eqCritDmg = 0, eqVamp = 0, eqHP = 0, eqShield = 0;
-    let eqCdr = 0, eqScore = 0, eqPull = 0, eqSkillDmg = 0, revive = 0;
+    let eqCdr = 0, eqScore = 0, eqPull = 0, eqSkillDmg = 0, eqDmg = 0, eqDodge = 0, revive = 0;
 
     for (const slot of ['weapon', 'relic1', 'relic2']) {
       const id = this.equip[slot];
@@ -113,10 +114,11 @@ export class Player {
         if (it.weaponType === 'ranged' && it.atkRange) atkRange = it.atkRange;
       } else {
         eqSpd += it.spd || 0; eqCrit += it.crit || 0; eqCritDmg += it.critDmg || 0;
-        eqVamp += it.vamp || 0; eqHP += it.hp || 0; eqShield += it.shield || 0;
+        eqVamp += (it.vamp || 0) + (it.lifesteal || 0); eqHP += it.hp || 0; eqShield += it.shield || 0;
         eqCdr += it.cdr || 0; eqScore += it.score || 0;
         eqPull += it.pull || 0; revive += it.revive || 0;
-        eqSkillDmg += it.skillDmg || 0;
+        eqSkillDmg += it.skillDmg || 0; eqDmg += it.dmg || 0; eqDodge += it.dodge || 0;
+        eqCrit += it.critRange || 0;
       }
     }
 
@@ -136,8 +138,8 @@ export class Player {
     const finalMaxHP = bFortify ? Math.round(baseMaxHP * 1.5) : baseMaxHP;
 
     return {
-      dmgMult: (1 + (this._bonusDmg || 0)) * bPower * bBerserk,
-      meleeDmg: PLAYER.ATTACK_DAMAGE * wDmg * bPower * (1 + (this._bonusDmg || 0)) * bBerserk,
+      dmgMult: (1 + eqDmg + (this._bonusDmg || 0)) * bPower * bBerserk,
+      meleeDmg: PLAYER.ATTACK_DAMAGE * wDmg * bPower * (1 + eqDmg + (this._bonusDmg || 0)) * bBerserk,
       atkSpd: wSpd * bFury * (1 + (this._bonusAtkSpd || 0)),
       speed: (1 + eqSpd + (this._bonusSpd || 0)) * bHaste * bBerserkSpd,
       crit: PLAYER.CRIT_BASE + wCrit + eqCrit + (this._bonusCrit || 0),
@@ -151,6 +153,7 @@ export class Player {
       pull: 6 + eqPull + (this.buffs.magnet ? 9 : 0),
       ultMult: 1 + (this._bonusUlt || 0),
       taken: 1,
+      dodge: Math.min(0.6, eqDodge + (this._bonusDodge || 0)),
       exec,
       revive: revive > 0 && !this.reviveUsed,
       el,
@@ -225,8 +228,8 @@ export class Player {
 
   // --- скилы ---
   assignSkill(slot, skillId) {
-    if (slot < 0 || slot >= MAX_SKILL_SLOTS) return false;
-    if (skillId && !SKILLS[skillId]) return false;
+    if (!Number.isInteger(slot) || slot < 0 || slot >= MAX_SKILL_SLOTS) return false;
+    if (skillId && (!SKILLS[skillId] || !this.learnedSkills.includes(skillId))) return false;
     // снимаем скил с другого слота, если уже там
     if (skillId) {
       for (let i = 0; i < MAX_SKILL_SLOTS; i++) {
@@ -239,7 +242,7 @@ export class Player {
   }
 
   unassignSkill(slot) {
-    if (slot < 0 || slot >= MAX_SKILL_SLOTS) return false;
+    if (!Number.isInteger(slot) || slot < 0 || slot >= MAX_SKILL_SLOTS) return false;
     this.skillSlots[slot] = null;
     this.recomputeStats();
     return true;

@@ -955,6 +955,7 @@ export class Enemy {
         this._bsJumpsLeft = this._randInt(bsCfg.jumpCount[0], bsCfg.jumpCount[1]);
         this._bsDuration = this._randFloat(bsCfg.spinDuration[0], bsCfg.spinDuration[1]);
         this._bsHitTimer = 0;
+        this._bsNextJumpTime = bsCfg.jumpDelay;
         this.rebraddBsCd = bsCfg.baseCd;
         room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: this.x, z: this.z, r: 3, dur: bsCfg.teleDur, color: bsCfg.teleColor });
         room.sendEvent({ type: 'ann', text: 'BONE STORM!', color: '#88ccff' });
@@ -1007,13 +1008,13 @@ export class Enemy {
     }
 
     // Jump to new position after jumpDelay
-    if (this._bsTotalTime > 0 && this._bsJumpsLeft > 0 && Math.floor(this._bsTotalTime / bsCfg.jumpDelay) >= (this._bsJumpsLeft - this._bsJumpsLeft + 1)) {
-      // Find next best cluster
+    if (this._bsJumpsLeft > 0 && this._bsTotalTime >= this._bsNextJumpTime) {
       const cluster = this._findBestCluster(room);
       if (cluster) {
         this._bsTargetX = cluster.x;
         this._bsTargetZ = cluster.z;
         this._bsJumpsLeft--;
+        this._bsNextJumpTime = this._bsTotalTime + bsCfg.jumpDelay;
       }
     }
 
@@ -1106,6 +1107,14 @@ export class Enemy {
   _randFloat(min, max) { return Math.random() * (max - min) + min; }
 
   // ========================================================================
+  // СЕРВЕРНЫЙ ТАЙМЕР — замена setTimeout на безопасные delayed-действия
+  // через room.telegraphHits (обрабатываются в тик-цикле Room).
+  // ========================================================================
+  _delayAction(room, delay, callback) {
+    room.telegraphHits.push({ life: delay, onHit: callback });
+  }
+
+  // ========================================================================
   // МЯСНИК: slam, charge, hook, cleave, minion spawn, blood rage
   // Priority-based adaptive AI, works with 1 player
   // ========================================================================
@@ -1128,6 +1137,12 @@ export class Enemy {
     // Blood rage active
     if (this.bloodRageT > 0) {
       this.bloodRageT -= dt;
+      if (this.bloodRageT <= 0 && this._bloodRageActive) {
+        // Revert blood rage buffs
+        this._bloodRageActive = false;
+        this.dmg /= rageCfg.dmgMul;
+        this.speed /= rageCfg.speedMul;
+      }
     }
 
     // Charge state machine
@@ -1237,9 +1252,10 @@ export class Enemy {
     }
 
     // Blood rage trigger (phase 3+)
-    if (this.phase >= rageCfg.minPhase && this.bloodRageCd <= 0 && this.bloodRageT <= 0) {
+    if (this.phase >= rageCfg.minPhase && this.bloodRageCd <= 0 && this.bloodRageT <= 0 && !this._bloodRageActive) {
       this.bloodRageCd = rageCfg.baseCd;
       this.bloodRageT = rageCfg.duration;
+      this._bloodRageActive = true;
       this.dmg *= rageCfg.dmgMul;
       this.speed *= rageCfg.speedMul;
       room.sendEvent({ type: 'ann', text: rageCfg.text, color: rageCfg.textColor });
@@ -1587,13 +1603,13 @@ export class Enemy {
         const sx = this.x + dirX * i * seismicCfg.waveSpacing;
         const sz = this.z + dirZ * i * seismicCfg.waveSpacing;
         room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: sx, z: sz, r: seismicCfg.waveRadius, dur: 0.3 + i * 0.15, color: seismicCfg.color });
-        setTimeout(() => {
+        this._delayAction(room, (0.3 + i * 0.15), () => {
           for (const p of room.playersArr()) {
             if (!p.alive) continue;
             if (Math.hypot(p.x - sx, p.z - sz) < seismicCfg.waveRadius) p.takeDamage(this.dmg * seismicCfg.dmgMul * em, room);
           }
           room.sendEvent({ type: 'skillfx', kind: 'nova', x: sx, z: sz, radius: seismicCfg.waveRadius, color: seismicCfg.color });
-        }, (300 + i * 150));
+        });
       }
     }
 
@@ -1629,13 +1645,13 @@ export class Enemy {
         const ex = target.x + (Math.random() - 0.5) * eruptionCfg.spread;
         const ez = target.z + (Math.random() - 0.5) * eruptionCfg.spread;
         room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: ex, z: ez, r: eruptionCfg.radius, dur: eruptionCfg.teleDur, color: eruptionCfg.teleColor });
-        setTimeout(() => {
+        this._delayAction(room, eruptionCfg.teleDur, () => {
           for (const p of room.playersArr()) {
             if (!p.alive) continue;
             if (Math.hypot(p.x - ex, p.z - ez) < eruptionCfg.radius) p.takeDamage(this.dmg * eruptionCfg.dmgMul * em, room);
           }
           room.sendEvent({ type: 'skillfx', kind: 'nova', x: ex, z: ez, radius: eruptionCfg.radius, color: eruptionCfg.hitColor });
-        }, 1000);
+        });
       }
     }
 
@@ -1744,7 +1760,7 @@ export class Enemy {
         const px = target.x + (Math.random() - 0.5) * pillarCfg.spread;
         const pz = target.z + (Math.random() - 0.5) * pillarCfg.spread;
         room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: px, z: pz, r: pillarCfg.radius, dur: pillarCfg.teleDur, color: pillarCfg.teleColor });
-        setTimeout(() => {
+        this._delayAction(room, pillarCfg.teleDur, () => {
           for (const p of room.playersArr()) {
             if (!p.alive) continue;
             if (Math.hypot(p.x - px, p.z - pz) < pillarCfg.radius) {
@@ -1753,7 +1769,7 @@ export class Enemy {
             }
           }
           room.sendEvent({ type: 'skillfx', kind: 'nova', x: px, z: pz, radius: pillarCfg.radius, color: pillarCfg.hitColor });
-        }, 1000);
+        });
       }
     }
 
@@ -1765,13 +1781,13 @@ export class Enemy {
         const mx = target.x + (Math.random() - 0.5) * meteorCfg.spread;
         const mz = target.z + (Math.random() - 0.5) * meteorCfg.spread;
         room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: mx, z: mz, r: meteorCfg.radius, dur: meteorCfg.teleDur, color: meteorCfg.teleColor });
-        setTimeout(() => {
+        this._delayAction(room, meteorCfg.teleDur, () => {
           for (const p of room.playersArr()) {
             if (!p.alive) continue;
             if (Math.hypot(p.x - mx, p.z - mz) < meteorCfg.radius) p.takeDamage(this.dmg * meteorCfg.dmgMul * em, room);
           }
           room.sendEvent({ type: 'skillfx', kind: 'nova', x: mx, z: mz, radius: meteorCfg.radius, color: meteorCfg.hitColor });
-        }, 1200);
+        });
       }
       room.sendEvent({ type: 'ann', text: meteorCfg.text, color: meteorCfg.textColor });
     }
@@ -1836,7 +1852,7 @@ export class Enemy {
       this.skDarknessCd = getAbilityCd(darkCfg, this.phase);
       const dzx = target.x, dzz = target.z;
       room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: dzx, z: dzz, r: darkCfg.radius, dur: darkCfg.teleDur, color: darkCfg.teleColor });
-      setTimeout(() => {
+      this._delayAction(room, darkCfg.teleDur, () => {
         for (const p of room.playersArr()) {
           if (!p.alive) continue;
           if (Math.hypot(p.x - dzx, p.z - dzz) < darkCfg.radius) {
@@ -1845,7 +1861,7 @@ export class Enemy {
           }
         }
         room.sendEvent({ type: 'skillfx', kind: 'nova', x: dzx, z: dzz, radius: darkCfg.radius, color: darkCfg.hitColor });
-      }, 1000);
+      });
     }
 
     // Shadow clones (phase 2+)
@@ -2237,7 +2253,7 @@ export class Enemy {
           const fx = target.x + (Math.random() - 0.5) * stormCfg.spread;
           const fz = target.z + (Math.random() - 0.5) * stormCfg.spread;
           room.sendEvent({ type: 'skillfx', kind: 'telegraph', x: fx, z: fz, r: stormCfg.radius, dur: stormCfg.teleDur, color: stormCfg.teleColor });
-          setTimeout(() => {
+          this._delayAction(room, stormCfg.teleDur, () => {
             for (const p of room.playersArr()) {
               if (!p.alive) continue;
               if (Math.hypot(p.x - fx, p.z - fz) < stormCfg.radius) {
@@ -2246,7 +2262,7 @@ export class Enemy {
               }
             }
             room.sendEvent({ type: 'skillfx', kind: 'nova', x: fx, z: fz, radius: stormCfg.radius, color: stormCfg.hitColor });
-          }, 1200);
+          });
         }
         room.sendEvent({ type: 'ann', text: stormCfg.text, color: stormCfg.textColor });
       }

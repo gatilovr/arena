@@ -146,7 +146,7 @@ export class Effects {
   }
 
   nova(pos, radius, color) {
-    // Улучшенная нова: двойное кольцо + вспышка
+    // Улучшенная нова: тройное кольцо + вспышка + glow + ударная волна
     const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
     const m = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 48), mat);
     m.rotation.x = -Math.PI / 2; m.position.set(pos.x, 0.1, pos.z);
@@ -160,6 +160,13 @@ export class Effects {
     this.scene.add(flash);
     this.arcs.push({ m: flash, mat: flashMat, t: 0, life: 0.35, max: radius * 0.7 });
 
+    // Second ring (delayed, thinner)
+    const mat2 = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+    const m2 = new THREE.Mesh(new THREE.RingGeometry(0.92, 1, 48), mat2);
+    m2.rotation.x = -Math.PI / 2; m2.position.set(pos.x, 0.12, pos.z);
+    this.scene.add(m2);
+    this.arcs.push({ m: m2, mat: mat2, t: -0.08, life: 0.55, max: radius * 1.15 });
+
     // Glow sprite at center
     if (this.glowTex) {
       const glowMat = new THREE.SpriteMaterial({ map: this.glowTex, color, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
@@ -168,6 +175,16 @@ export class Effects {
       glow.scale.setScalar(radius * 1.5);
       this.scene.add(glow);
       this.arcs.push({ m: glow, mat: glowMat, t: 0, life: 0.4, max: 1 });
+    }
+
+    // Vertical shockwave pillar (for large novas)
+    if (radius > 4 && this.glowTex) {
+      const pillarMat = new THREE.SpriteMaterial({ map: this.glowTex, color, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+      const pillar = new THREE.Sprite(pillarMat);
+      pillar.position.set(pos.x, radius * 0.4, pos.z);
+      pillar.scale.set(radius * 0.6, radius * 1.2, 1);
+      this.scene.add(pillar);
+      this.arcs.push({ m: pillar, mat: pillarMat, t: 0, life: 0.35, max: 1 });
     }
   }
 
@@ -260,6 +277,17 @@ export class Effects {
         const k = tg.t / tg.dur;
         const mat = tg.g.children[0]?.material;
         if (mat) mat.opacity = 0.5 * (0.6 + Math.sin(performance.now() * 0.014) * 0.4) * Math.min(1, k * 3);
+        // Countdown ring shrinks
+        if (tg.cdRing) {
+          const cdScale = Math.max(0.01, 1 - k);
+          tg.cdRing.scale.setScalar(cdScale);
+          tg.cdRing.material.opacity = 0.4 * (1 - k * 0.5);
+        }
+        // Flash near end
+        if (k > 0.85) {
+          const flashMat = tg.g.children[1]?.material;
+          if (flashMat) flashMat.opacity = 0.12 + (k - 0.85) * 2.0;
+        }
         if (k >= 1) { this.scene.remove(tg.g); this.telegraphs.splice(i, 1); }
       }
     }
@@ -303,6 +331,7 @@ export class Effects {
   }
 
   beam(x1, y1, z1, x2, y2, z2, color) {
+    // Улучшенный луч: линия + glow-спрайт в середине + точки на концах
     const g = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(x1, y1, z1),
       new THREE.Vector3(x2, y2, z2),
@@ -311,7 +340,28 @@ export class Effects {
     const line = new THREE.Line(g, mat);
     this.scene.add(line);
     this.beams = this.beams || [];
-    this.beams.push({ line, mat, t: 0, life: 0.18 });
+    this.beams.push({ line, mat, t: 0, life: 0.22 });
+
+    // Glow at midpoint
+    if (this.glowTex) {
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, mz = (z1 + z2) / 2;
+      const glowMat = new THREE.SpriteMaterial({ map: this.glowTex, color, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+      const glow = new THREE.Sprite(glowMat);
+      glow.position.set(mx, my, mz);
+      glow.scale.setScalar(1.5);
+      this.scene.add(glow);
+      this.arcs.push({ m: glow, mat: glowMat, t: 0, life: 0.2, max: 1 });
+    }
+
+    // Impact point glow at target
+    if (this.glowTex) {
+      const impMat = new THREE.SpriteMaterial({ map: this.glowTex, color, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+      const imp = new THREE.Sprite(impMat);
+      imp.position.set(x2, y2, z2);
+      imp.scale.setScalar(0.8);
+      this.scene.add(imp);
+      this.arcs.push({ m: imp, mat: impMat, t: 0, life: 0.18, max: 1 });
+    }
   }
 
   zone(x, z, r, dur, color) {
@@ -339,18 +389,22 @@ export class Effects {
     // Outer ring (pulsing)
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.86, 1, 48), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false, toneMapped: false }));
     ring.rotation.x = -Math.PI / 2;
-    // Inner fill (semi-transparent)
+    // Inner fill (semi-transparent, animated)
     const fill = new THREE.Mesh(new THREE.CircleGeometry(1, 48), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false, toneMapped: false }));
     fill.rotation.x = -Math.PI / 2;
     // Cross-hair lines for better readability
     const lineMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, depthWrite: false, toneMapped: false });
     const line1 = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.001, 2), lineMat);
     const line2 = new THREE.Mesh(new THREE.BoxGeometry(2, 0.001, 0.02), lineMat);
-    g.add(ring); g.add(fill); g.add(line1); g.add(line2);
+    // Countdown ring (shrinks over time)
+    const cdRing = new THREE.Mesh(new THREE.RingGeometry(0.7, 0.75, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false, toneMapped: false }));
+    cdRing.rotation.x = -Math.PI / 2;
+    cdRing.position.y = 0.01;
+    g.add(ring); g.add(fill); g.add(line1); g.add(line2); g.add(cdRing);
     g.position.set(x, 0.07, z); g.scale.setScalar(r);
     this.scene.add(g);
     this.telegraphs = this.telegraphs || [];
-    this.telegraphs.push({ g, t: 0, dur });
+    this.telegraphs.push({ g, t: 0, dur, cdRing });
   }
 
   // --- аура-кольца сетов ---
@@ -402,6 +456,62 @@ export class Effects {
     this.scene.add(m);
     this.portals = this.portals || [];
     this.portals.push({ m, mat, t: 0, life: 0.6 });
+  }
+
+  // --- холодное пламя (линия огня по земле) ---
+  coldflame(x1, z1, x2, z2, color) {
+    const dx = x2 - x1, dz = z2 - z1;
+    const len = Math.hypot(dx, dz);
+    const segments = Math.max(3, Math.floor(len / 1.5));
+    for (let i = 0; i < segments; i++) {
+      const t = i / segments;
+      const px = x1 + dx * t, pz = z1 + dz * t;
+      const m = this.pool[this.poolIdx % this.poolSize];
+      this.poolIdx++;
+      m.material = this._mat(color);
+      m.visible = true;
+      m.position.set(px + (Math.random() - 0.5) * 0.5, 0.2 + Math.random() * 0.4, pz + (Math.random() - 0.5) * 0.5);
+      const s = 0.5 + Math.random() * 0.5;
+      m.scale.set(s, s * 1.5, s);
+      m.rotation.set(0, 0, 0);
+      this.particles.push({
+        m,
+        vel: new THREE.Vector3((Math.random() - 0.5) * 1.5, 1.5 + Math.random() * 2, (Math.random() - 0.5) * 1.5),
+        rot: new THREE.Vector3(0, (Math.random() - 0.5) * 4, 0),
+        life: 0.5 + Math.random() * 0.4
+      });
+    }
+  }
+
+  // --- костяной шторм (вихрь костей) ---
+  boneStorm(x, z, color) {
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.7, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+    // Spinning bone ring
+    const geo = new THREE.RingGeometry(1.5, 3.0, 6, 1, 0, 5.2);
+    geo.rotateX(-Math.PI / 2);
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, 0.5, z);
+    this.scene.add(m);
+    this.whirlMeshes = this.whirlMeshes || [];
+    this.whirlMeshes.push({ m, mat, t: 0, life: 1.5 });
+    // Bone fragments flying out
+    for (let i = 0; i < 12; i++) {
+      const bm = this.pool[this.poolIdx % this.poolSize];
+      this.poolIdx++;
+      bm.material = this._mat(0xd4d0b8);
+      bm.visible = true;
+      const a = (i / 12) * Math.PI * 2;
+      bm.position.set(x + Math.cos(a) * 1.5, 0.5 + Math.random() * 1.5, z + Math.sin(a) * 1.5);
+      const s = 0.3 + Math.random() * 0.3;
+      bm.scale.set(s, s, s);
+      bm.rotation.set(Math.random() * 3, Math.random() * 3, 0);
+      this.particles.push({
+        m: bm,
+        vel: new THREE.Vector3(Math.cos(a) * 4, 2 + Math.random() * 3, Math.sin(a) * 4),
+        rot: new THREE.Vector3((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10),
+        life: 0.6 + Math.random() * 0.4
+      });
+    }
   }
 
   clear() {

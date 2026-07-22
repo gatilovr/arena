@@ -58,6 +58,11 @@ export class LocalPlayer {
     this.trailGeo = new THREE.RingGeometry(0.01, 0.5, 6, 1, 0, 2.8);
     this.trailGeo.rotateX(-Math.PI / 2);
 
+    // dash afterimage ghosts
+    this.dashGhosts = [];
+    this._dashGhostTimer = 0;
+    this._dashTrailColor = 0x66ccff;
+
     this.snap = null;       // последний серверный снапшот игрока
     this.alive = true;
     this.trailColor = 0xff3300;
@@ -86,6 +91,7 @@ export class LocalPlayer {
       const len = Math.hypot(dx, dz) || 1;
       this.dashDX = dx / len; this.dashDZ = dz / len;
       this.dashing = true; this.dashT = PLAYER.DASH_DUR;
+      this._dashGhostTimer = 0;
     }
     // локальный кулдаун атаки — для синхронизации анимации взмаха
     if (this.atkCd > 0) this.atkCd -= dt;
@@ -137,6 +143,23 @@ export class LocalPlayer {
     this.mesh.position.set(this.x, this.y - PLAYER.HEIGHT, this.z);
     this.mesh.rotation.y = this.yaw;
     this.mesh.visible = this.alive;
+
+    // === DASH AFTERIMAGE GHOSTS ===
+    if (this.dashing) {
+      this._dashGhostTimer -= dt;
+      if (this._dashGhostTimer <= 0) {
+        this._dashGhostTimer = 0.04; // spawn ghost every 40ms
+        this._spawnDashGhost();
+      }
+    }
+    // Update & cull dash ghosts
+    for (let i = this.dashGhosts.length - 1; i >= 0; i--) {
+      const gh = this.dashGhosts[i];
+      gh.life -= dt;
+      if (gh.life <= 0) { this.scene.remove(gh.m); this.dashGhosts.splice(i, 1); continue; }
+      gh.mat.opacity = (gh.life / gh.maxLife) * 0.4;
+      gh.m.scale.multiplyScalar(Math.pow(0.6, dt));
+    }
 
     // bob phase (for camera + weapon)
     const moving = Math.hypot(this.vx, this.vz) > 1;

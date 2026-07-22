@@ -814,10 +814,12 @@ export class SkillSystem {
       }
     }
 
-    // зоны яда
+    // зоны яда (только зоны игроков, не зоны босса)
     if (this.room.zones) {
       for (let i = this.room.zones.length - 1; i >= 0; i--) {
         const z = this.room.zones[i];
+        // Пропускаем зоны босса (обрабатываются в Room._updateZones)
+        if (z.owner) continue;
         z.life -= dt;
         z.tick -= dt;
         if (z.tick <= 0) {

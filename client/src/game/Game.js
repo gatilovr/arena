@@ -432,6 +432,16 @@ export class Game {
       }
       case 'ann': {
         this.hud.announce(ev.text, ev.color);
+        // Boss-specific announcement effects
+        if (ev.text === 'BONE STORM!') {
+          // Find rebradd boss position for effect
+          for (const [, ev2] of this.enemies) {
+            if (ev2.type === 'rebradd' && ev2.isBoss) {
+              this.effects.boneStorm(ev2.curr.x, ev2.curr.z, 0xccccaa);
+              break;
+            }
+          }
+        }
         break;
       }
       case 'ult': {
@@ -528,6 +538,12 @@ export class Game {
         break;
       case 'float':
         this.effects.floatText(ev.text, new THREE.Vector3(ev.x, ev.y, ev.z), ev.color, ev.size || 15);
+        break;
+      case 'text':
+        // Boss ability text (BACKSTAB, HOOK, DRAIN, etc.)
+        this.effects.floatText(ev.text, new THREE.Vector3(ev.x, ev.y || 2.5, ev.z),
+          typeof ev.color === 'number' ? '#' + ev.color.toString(16).padStart(6, '0') : (ev.color || '#ff4444'),
+          18, 'crit');
         break;
     }
   }
